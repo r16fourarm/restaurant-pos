@@ -1,13 +1,21 @@
-class Product {
-  final String name;
-  final double price;
+import 'package:hive/hive.dart';
 
-  Product(this.name, this.price);
-}
+part 'product.g.dart';
 
-class CartItem {
-  final Product product;
-  int quantity;
+@HiveType(typeId: 2)
+class Product extends HiveObject {
+  @HiveField(0)
+  String name;
 
-  CartItem(this.product, this.quantity);
+  @HiveField(1)
+  double price;
+
+  @HiveField(2)
+  String category; // Optional: 'Food', 'Drink', etc.
+
+  Product({
+    required this.name,
+    required this.price,
+    required this.category,
+  });
 }

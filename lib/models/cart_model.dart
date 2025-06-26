@@ -17,7 +17,7 @@ class CartModel extends ChangeNotifier {
       _items.add(item);
     }
 
-      print('Added: ${item.name}, qty: ${item.quantity}, total now: $total');
+      // print('Added: ${item.name}, qty: ${item.quantity}, total now: $total');
 
     notifyListeners();
   }

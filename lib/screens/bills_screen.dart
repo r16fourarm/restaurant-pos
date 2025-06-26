@@ -28,31 +28,34 @@ class _BillsScreenState extends State<BillsScreen> {
   void _clearAllOrders() {
     showDialog(
       context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Clear All Orders?'),
-            content: const Text('This will delete all saved orders.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  _orderBox.clear();
-                  Navigator.pop(context);
-                  setState(() {});
-                },
-                child: const Text('Confirm'),
-              ),
-            ],
+      builder: (_) => AlertDialog(
+        title: const Text('Clear All Orders?'),
+        content: const Text('This will delete all saved orders.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              _orderBox.clear();
+              Navigator.pop(context);
+              setState(() {});
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final orders = _orderBox.values.toList();
+    final totalRevenue = orders.fold<double>(
+      0,
+      (sum, order) => sum + order.total,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -66,41 +69,56 @@ class _BillsScreenState extends State<BillsScreen> {
             ),
         ],
       ),
-      body:
-          orders.isEmpty
-              ? const Center(child: Text('No orders yet.'))
-              : ListView.builder(
-                itemCount: orders.length,
-                itemBuilder: (context, index) {
-                  final order = orders[index];
-                  return ListTile(
-                    title: Text(
-                      order.orderer.isNotEmpty
-                          ? 'Order by ${order.orderer}'
-                          : 'Unnamed Order',
-                    ),
-                    subtitle: Text(
-                      '${order.time.toLocal()} - Rp ${order.total.toStringAsFixed(0)}',
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () => _deleteOrder(index),
-                    ),
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OrderDetailScreen(order: order),
+      body: Column(
+        children: [
+          Expanded(
+            child: orders.isEmpty
+                ? const Center(child: Text('No orders yet.'))
+                : ListView.builder(
+                    itemCount: orders.length,
+                    itemBuilder: (context, index) {
+                      final order = orders[index];
+                      return ListTile(
+                        title: Text(
+                          order.orderer.isNotEmpty
+                              ? 'Order by ${order.orderer}'
+                              : 'Unnamed Order',
                         ),
-                      );
+                        subtitle: Text(
+                          '${order.time.toLocal()} - Rp ${order.total.toStringAsFixed(0)}',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () => _deleteOrder(index),
+                        ),
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  OrderDetailScreen(order: order),
+                            ),
+                          );
 
-                      if (result == 'reordered') {
-                        setState(() {}); // Refresh order list
-                      }
+                          if (result == 'reordered') {
+                            setState(() {});
+                          }
+                        },
+                      );
                     },
-                  );
-                },
+                  ),
+          ),
+          if (orders.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Total Revenue: Rp ${totalRevenue.toStringAsFixed(0)}',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
+            ),
+        ],
+      ),
     );
   }
 }
