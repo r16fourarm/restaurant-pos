@@ -18,6 +18,11 @@ void main() async {
   Hive.registerAdapter(OrderItemAdapter());// Register OrderItem adapter
   Hive.registerAdapter(ProductAdapter()); // Register Product  adapter
 
+  // 🧼 TEMP: Clean old 'products' box if schema changed
+  // await Hive.deleteBoxFromDisk('products');
+  // await Hive.deleteBoxFromDisk('orders');
+
+
   await Hive.openBox<Order>('orders'); // ✅ VERY IMPORTANT
   // await Hive.openBox<OrderItem>('orderItems'); // Open OrderItem box
   await Hive.openBox<Product>('products'); // Open Product box

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
+import '../models/cart_item.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
@@ -18,59 +19,96 @@ class CartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cart = context.watch<CartModel>();
 
-    if (cart.items.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Cart')),
-        body: const Center(child: Text('Cart is empty')),
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text('Your Cart')),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: cart.items.length,
-              itemBuilder: (context, index) {
-                final item = cart.items[index];
+      body: cart.items.isEmpty
+          ? const Center(child: Text('Cart is empty'))
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: cart.items.length,
+                    itemBuilder: (context, index) {
+                      final CartItem item = cart.items[index];
 
-                return ListTile(
-                  title: Text(item.name),
-                  subtitle: Text('Rp ${item.price} x ${item.quantity}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${item.product.name} (x${item.quantity})',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('Rp ${item.product.price.toStringAsFixed(0)}'),
+
+                              if ((item.addons).isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                const Text('Add-ons:', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ...item.addons.map((addon) => Text(
+                                      '- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
+                                      style: const TextStyle(fontSize: 13),
+                                    )),
+                              ],
+
+                              const SizedBox(height: 8),
+                              Text(
+                                'Subtotal: Rp ${item.totalPrice.toStringAsFixed(0)}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove),
+                                    onPressed: () => cart.decreaseQty(item),
+                                  ),
+                                  Text('${item.quantity}', style: const TextStyle(fontSize: 16)),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: () => cart.increaseQty(item),
+                                  ),
+                                ],
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.grey.shade100,
+                  child: Column(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove),
-                        onPressed: () => context.read<CartModel>().decreaseQty(item),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Total:',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('Rp ${cart.total.toStringAsFixed(0)}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ],
                       ),
-                      Text('${item.quantity}'),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: () => context.read<CartModel>().increaseQty(item),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _proceedToCheckout(context),
+                          child: const Text('Proceed to Checkout'),
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Text('Total: Rp ${cart.total.toStringAsFixed(0)}'),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () => _proceedToCheckout(context),
-                  child: const Text('Proceed to Checkout'),
-                ),
+                )
               ],
             ),
-          )
-        ],
-      ),
     );
   }
 }

@@ -20,19 +20,25 @@ class OrderItemAdapter extends TypeAdapter<OrderItem> {
       name: fields[0] as String,
       price: fields[1] as double,
       quantity: fields[2] as int,
+      addons: (fields[3] as List).cast<String>(),
+      addonsPrice: fields[4] as double,
     );
   }
 
   @override
   void write(BinaryWriter writer, OrderItem obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
       ..write(obj.price)
       ..writeByte(2)
-      ..write(obj.quantity);
+      ..write(obj.quantity)
+      ..writeByte(3)
+      ..write(obj.addons)
+      ..writeByte(4)
+      ..write(obj.addonsPrice);
   }
 
   @override

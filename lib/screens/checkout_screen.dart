@@ -1,10 +1,10 @@
-// lib/screens/checkout_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import '../models/cart_model.dart';
+// import '../models/product.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -22,9 +22,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final orderItems = cart.items.map((item) {
       return OrderItem(
-        name: item.name,
-        price: item.price,
+        name: item.product.name,
+        price: item.product.price,
         quantity: item.quantity,
+        addons: item.addons.map((a) => a.name).toList(),
+        addonsPrice: item.addons.fold(0.0, (sum, a) => (sum as double)+ a.price) ?? 0.0,
       );
     }).toList();
 
@@ -32,7 +34,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final newOrder = Order(
       items: orderItems,
-      total: cart.total,
+      total: total,
       time: DateTime.now(),
       orderer: orderer,
     );
@@ -40,7 +42,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final box = Hive.box<Order>('orders');
     await box.add(newOrder);
 
-    cart.clear(); // Clear the cart after confirming
+    cart.clear();
 
     showDialog(
       context: context,
@@ -78,7 +80,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 itemBuilder: (context, index) {
                   final item = cart.items[index];
                   return ListTile(
-                    title: Text('${item.name} x ${item.quantity}'),
+                    title: Text('${item.product.name} x ${item.quantity}'),
+                    subtitle: (item.addons.isNotEmpty)
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: item.addons
+                                .map((addon) => Text('- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})'))
+                                .toList(),
+                          )
+                        : null,
                     trailing: Text('Rp ${item.totalPrice.toStringAsFixed(0)}'),
                   );
                 },

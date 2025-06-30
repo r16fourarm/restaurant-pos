@@ -1,5 +1,5 @@
+// lib/screens/order_screen.dart
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
@@ -7,19 +7,22 @@ import '../models/cart_item.dart';
 import '../models/product.dart';
 import 'cart_screen.dart';
 
-class OrderScreen extends StatelessWidget {
-  OrderScreen({super.key});
+class OrderScreen extends StatefulWidget {
+  const OrderScreen({super.key});
 
-  final ValueNotifier<String> selectedCategory = ValueNotifier<String>('All');
+  @override
+  State<OrderScreen> createState() => _OrderScreenState();
+}
+
+class _OrderScreenState extends State<OrderScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedCategory = 'All';
 
   void _addToCart(BuildContext context, Product product) {
     final cart = context.read<CartModel>();
     cart.addItem(
-      CartItem(
-        id: product.key.toString(),
-        name: product.name,
-        price: product.price,
-      ),
+      CartItem(product: product), // ✅ Updated here
     );
   }
 
@@ -38,17 +41,19 @@ class OrderScreen extends StatelessWidget {
     Navigator.pushNamed(context, '/recap');
   }
 
+  void _goToProducts(BuildContext context) {
+    Navigator.pushNamed(context, '/products');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final productBox = Hive.box<Product>('products');
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order Menu'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.pushNamed(context, '/products'),
+            onPressed: () => _goToProducts(context),
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -67,60 +72,72 @@ class OrderScreen extends StatelessWidget {
         ],
       ),
       body: ValueListenableBuilder(
-        valueListenable: productBox.listenable(),
+        valueListenable: Hive.box<Product>('products').listenable(),
         builder: (context, Box<Product> box, _) {
           final allProducts = box.values.toList();
+
+          final filtered = allProducts.where((p) {
+            final matchesCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
+            final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
+            return matchesCategory && matchesSearch;
+          }).toList();
 
           return Column(
             children: [
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: ValueListenableBuilder<String>(
-                  valueListenable: selectedCategory,
-                  builder: (context, category, _) {
-                    return DropdownButton<String>(
-                      value: category,
-                      onChanged: (value) {
-                        if (value != null) selectedCategory.value = value;
-                      },
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'Search...',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButton<String>(
+                      value: _selectedCategory,
                       items: ['All', 'Food', 'Drink', 'Other']
                           .map((cat) => DropdownMenuItem(
                                 value: cat,
                                 child: Text(cat),
                               ))
                           .toList(),
-                    );
-                  },
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategory = value!;
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ),
               Expanded(
-                child: ValueListenableBuilder<String>(
-                  valueListenable: selectedCategory,
-                  builder: (context, category, _) {
-                    final filtered = category == 'All'
-                        ? allProducts
-                        : allProducts.where((p) => p.category == category).toList();
-
-                    if (filtered.isEmpty) {
-                      return const Center(child: Text('No products in this category.'));
-                    }
-
-                    return ListView.builder(
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final product = filtered[index];
-                        return ListTile(
-                          title: Text(product.name),
-                          subtitle: Text('Rp ${product.price.toStringAsFixed(0)}'),
-                          trailing: ElevatedButton(
-                            onPressed: () => _addToCart(context, product),
-                            child: const Text('Add'),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
+                child: filtered.isEmpty
+                    ? const Center(child: Text('No matching products found.'))
+                    : ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final product = filtered[index];
+                          return ListTile(
+                            title: Text(product.name),
+                            subtitle: Text('Rp ${product.price.toStringAsFixed(0)} • ${product.category}'),
+                            trailing: ElevatedButton(
+                              onPressed: () => _addToCart(context, product),
+                              child: const Text('Add'),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           );
