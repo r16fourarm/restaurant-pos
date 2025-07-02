@@ -19,10 +19,80 @@ class _OrderScreenState extends State<OrderScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
-  void _addToCart(BuildContext context, Product product) {
+  void _addToCart(BuildContext context, Product product) async {
+    if (product.isAddon) return; // Prevent adding an addon directly
+
+    final allProducts = Hive.box<Product>('products').values.toList();
+    final availableAddons =
+        allProducts
+            .where(
+              (p) =>
+                  p.isAddon &&
+                  p.addonCategory != null &&
+                  p.addonCategory == product.category,
+            )
+            .toList();
+
+    List<Product> selectedAddons = [];
+
+    if (availableAddons.isNotEmpty) {
+      final result = await showDialog(
+        context: context,
+        builder: (context) {
+          final tempSelected = <Product>{};
+
+          return AlertDialog(
+            title: const Text('Select Add-ons'),
+            content: StatefulBuilder(
+              builder: (context, setState) {
+                return SizedBox(
+                  width: double.maxFinite,
+                  child: ListView(
+                    shrinkWrap: true,
+                    children:
+                        availableAddons.map((addon) {
+                          return CheckboxListTile(
+                            title: Text(
+                              '${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
+                            ),
+                            value: tempSelected.contains(addon),
+                            onChanged: (checked) {
+                              setState(() {
+                                if (checked == true) {
+                                  tempSelected.add(addon);
+                                } else {
+                                  tempSelected.remove(addon);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                  ),
+                );
+              },
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context, <Product>[]),
+              ),
+              ElevatedButton(
+                child: const Text('Add to Cart'),
+                onPressed: () => Navigator.pop(context, tempSelected.toList()),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (result != null && result is List<Product>) {
+        selectedAddons = result;
+      }
+    }
+
     final cart = context.read<CartModel>();
     cart.addItem(
-      CartItem(product: product), // ✅ Updated here
+      CartItem(product: product, quantity: 1, addons: selectedAddons),
     );
   }
 
@@ -74,13 +144,18 @@ class _OrderScreenState extends State<OrderScreen> {
       body: ValueListenableBuilder(
         valueListenable: Hive.box<Product>('products').listenable(),
         builder: (context, Box<Product> box, _) {
-          final allProducts = box.values.toList();
+          final allProducts = box.values.where((p) => !p.isAddon).toList();
 
-          final filtered = allProducts.where((p) {
-            final matchesCategory = _selectedCategory == 'All' || p.category == _selectedCategory;
-            final matchesSearch = p.name.toLowerCase().contains(_searchQuery.toLowerCase());
-            return matchesCategory && matchesSearch;
-          }).toList();
+          final filtered =
+              allProducts.where((p) {
+                final matchesCategory =
+                    _selectedCategory == 'All' ||
+                    p.category == _selectedCategory;
+                final matchesSearch = p.name.toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                );
+                return matchesCategory && matchesSearch;
+              }).toList();
 
           return Column(
             children: [
@@ -106,12 +181,15 @@ class _OrderScreenState extends State<OrderScreen> {
                     const SizedBox(width: 8),
                     DropdownButton<String>(
                       value: _selectedCategory,
-                      items: ['All', 'Food', 'Drink', 'Other']
-                          .map((cat) => DropdownMenuItem(
-                                value: cat,
-                                child: Text(cat),
-                              ))
-                          .toList(),
+                      items:
+                          ['All', 'Food', 'Drink', 'Other']
+                              .map(
+                                (cat) => DropdownMenuItem(
+                                  value: cat,
+                                  child: Text(cat),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (value) {
                         setState(() {
                           _selectedCategory = value!;
@@ -122,22 +200,27 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ),
               Expanded(
-                child: filtered.isEmpty
-                    ? const Center(child: Text('No matching products found.'))
-                    : ListView.builder(
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final product = filtered[index];
-                          return ListTile(
-                            title: Text(product.name),
-                            subtitle: Text('Rp ${product.price.toStringAsFixed(0)} • ${product.category}'),
-                            trailing: ElevatedButton(
-                              onPressed: () => _addToCart(context, product),
-                              child: const Text('Add'),
-                            ),
-                          );
-                        },
-                      ),
+                child:
+                    filtered.isEmpty
+                        ? const Center(
+                          child: Text('No matching products found.'),
+                        )
+                        : ListView.builder(
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final product = filtered[index];
+                            return ListTile(
+                              title: Text(product.name),
+                              subtitle: Text(
+                                'Rp ${product.price.toStringAsFixed(0)} • ${product.category}',
+                              ),
+                              trailing: ElevatedButton(
+                                onPressed: () => _addToCart(context, product),
+                                child: const Text('Add'),
+                              ),
+                            );
+                          },
+                        ),
               ),
             ],
           );

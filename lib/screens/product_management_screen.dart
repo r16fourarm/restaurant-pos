@@ -7,8 +7,7 @@ class ProductManagementScreen extends StatefulWidget {
   const ProductManagementScreen({super.key});
 
   @override
-  State<ProductManagementScreen> createState() =>
-      _ProductManagementScreenState();
+  State<ProductManagementScreen> createState() => _ProductManagementScreenState();
 }
 
 class _ProductManagementScreenState extends State<ProductManagementScreen> {
@@ -17,6 +16,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
   final _priceController = TextEditingController();
   String _category = 'Food';
   bool _isAddon = false;
+  String? _addonCategory;
   Product? _editingProduct;
 
   void _showForm([Product? product]) {
@@ -26,154 +26,135 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       _priceController.text = product.price.toString();
       _category = product.category;
       _isAddon = product.isAddon;
+      _addonCategory = product.addonCategory;
     } else {
       _editingProduct = null;
       _nameController.clear();
       _priceController.clear();
       _category = 'Food';
       _isAddon = false;
+      _addonCategory = null;
     }
 
     showDialog(
       context: context,
-      builder:
-          (_) => StatefulBuilder(
-            builder: (context, setState) {
-              return AlertDialog(
-                title: Text(product == null ? 'Add Product' : 'Edit Product'),
-                content: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Name'),
-                        validator:
-                            (value) => value!.isEmpty ? 'Enter name' : null,
-                      ),
-                      TextFormField(
-                        controller: _priceController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Price'),
-                        validator:
-                            (value) => value!.isEmpty ? 'Enter price' : null,
-                      ),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(product == null ? 'Add Product' : 'Edit Product'),
+            content: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(labelText: 'Name'),
+                      validator: (value) => value!.isEmpty ? 'Enter name' : null,
+                    ),
+                    TextFormField(
+                      controller: _priceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Price'),
+                      validator: (value) => value!.isEmpty ? 'Enter price' : null,
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: _category,
+                      items: ['Food', 'Drink', 'Other']
+                          .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                          .toList(),
+                      onChanged: (val) => setState(() => _category = val!),
+                      decoration: const InputDecoration(labelText: 'Category'),
+                    ),
+                    CheckboxListTile(
+                      value: _isAddon,
+                      onChanged: (val) => setState(() => _isAddon = val ?? false),
+                      title: const Text('Mark as Add-on'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    if (_isAddon)
                       DropdownButtonFormField<String>(
-                        value: _category,
-                        items:
-                            ['Food', 'Drink', 'Other']
-                                .map(
-                                  (cat) => DropdownMenuItem(
-                                    value: cat,
-                                    child: Text(cat),
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: (val) => setState(() => _category = val!),
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                        ),
-                      ),
-                      CheckboxListTile(
-                        value: _isAddon,
-                        onChanged: (val) {
-                          setState(() {
-                            _isAddon = val ?? false;
-                          });
+                        value: _addonCategory,
+                        items: ['Food', 'Drink', 'Coffee', 'Tea', 'Other']
+                            .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                            .toList(),
+                        onChanged: (val) => setState(() => _addonCategory = val),
+                        decoration: const InputDecoration(labelText: 'Add-on for Category'),
+                        validator: (val) {
+                          if (_isAddon && (val == null || val.isEmpty)) {
+                            return 'Select a category this add-on applies to';
+                          }
+                          return null;
                         },
-                        title: const Text('Mark as Add-on'),
-                        contentPadding: EdgeInsets.zero,
                       ),
-                      if (_isAddon)
-                        DropdownButtonFormField<String>(
-                          value: _editingProduct?.addonCategory,
-                          items:
-                              ['Food', 'Drink', 'Coffee', 'Tea', 'Other']
-                                  .map(
-                                    (type) => DropdownMenuItem(
-                                      value: type,
-                                      child: Text(type),
-                                    ),
-                                  )
-                                  .toList(),
-                          onChanged: (val) {
-                            setState(() {
-                              _editingProduct?.addonCategory = val;
-                            });
-                          },
-                          decoration: const InputDecoration(
-                            labelText: 'Add-on Category',
-                          ),
-                        ),
-                    ],
-                  ),
+                  ],
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        final name = _nameController.text;
-                        final price =
-                            double.tryParse(_priceController.text) ?? 0;
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (_formKey.currentState!.validate()) {
+                    final name = _nameController.text;
+                    final price = double.tryParse(_priceController.text) ?? 0;
 
-                        if (_editingProduct != null) {
-                          _editingProduct!
-                            ..name = name
-                            ..price = price
-                            ..category = _category
-                            ..isAddon = _isAddon
-                            ..save();
-                        } else {
-                          Hive.box<Product>('products').add(
-                            Product(
-                              name: name,
-                              price: price,
-                              category: _category,
-                              isAddon: _isAddon,
-                            ),
-                          );
-                        }
+                    if (_editingProduct != null) {
+                      _editingProduct!
+                        ..name = name
+                        ..price = price
+                        ..category = _category
+                        ..isAddon = _isAddon
+                        ..addonCategory = _isAddon ? _addonCategory : null
+                        ..save();
+                    } else {
+                      Hive.box<Product>('products').add(
+                        Product(
+                          name: name,
+                          price: price,
+                          category: _category,
+                          isAddon: _isAddon,
+                          addonCategory: _isAddon ? _addonCategory : null,
+                        ),
+                      );
+                    }
 
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: Text(product == null ? 'Add' : 'Update'),
-                  ),
-                ],
-              );
-            },
-          ),
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(product == null ? 'Add' : 'Update'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
   void _confirmDelete(BuildContext context, Product product) {
     showDialog(
       context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Delete Product?'),
-            content: const Text(
-              'Are you sure you want to delete this product?',
-            ),
-            actions: [
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(context),
-              ),
-              TextButton(
-                child: const Text('Delete'),
-                onPressed: () {
-                  product.delete();
-                  Navigator.pop(context);
-                },
-              ),
-            ],
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Product?'),
+        content: const Text('Are you sure you want to delete this product?'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
           ),
+          TextButton(
+            child: const Text('Delete'),
+            onPressed: () {
+              product.delete();
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -214,20 +195,12 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text(
-                'Products',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              ...regularProducts.map((product) => _buildProductTile(product)),
-
+              const Text('Products', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ...regularProducts.map(_buildProductTile),
               const SizedBox(height: 24),
               const Divider(),
-              const Text(
-                'Add-ons',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              ...addonProducts.map((product) => _buildProductTile(product)),
-
+              const Text('Add-ons', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ...addonProducts.map(_buildProductTile),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () => _showForm(),
