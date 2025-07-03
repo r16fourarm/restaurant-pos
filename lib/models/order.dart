@@ -18,10 +18,26 @@ class Order extends HiveObject {
   @HiveField(3)
   String orderer;
 
+  @HiveField(4)
+  String? tableNumber; // new
+
+  @HiveField(5)
+  String status; // 'unpaid' or 'paid'
+
+  @HiveField(6)
+  String? paymentMethod; // 'Cash', 'QRIS', etc.
+
+  @HiveField(7)
+  DateTime? paymentTime; // when paid
+
   Order({
     required this.items,
     required this.total,
     required this.time,
     required this.orderer,
+    this.tableNumber,
+    this.status = 'unpaid',
+    this.paymentMethod,
+    this.paymentTime,
   });
 }

@@ -20,7 +20,7 @@ class _OrderScreenState extends State<OrderScreen> {
   String _selectedCategory = 'All';
 
   void _addToCart(BuildContext context, Product product) async {
-    if (product.isAddon) return; // Prevent adding an addon directly
+    if (product.isAddon) return;
 
     final allProducts = Hive.box<Product>('products').values.toList();
     final availableAddons =
@@ -31,61 +31,86 @@ class _OrderScreenState extends State<OrderScreen> {
                   p.addonCategory != null &&
                   p.addonCategory == product.category,
             )
-            .toList();
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
 
     List<Product> selectedAddons = [];
 
     if (availableAddons.isNotEmpty) {
-      final result = await showDialog(
+      final result = await showModalBottomSheet<List<Product>>(
         context: context,
+        isScrollControlled: true,
         builder: (context) {
           final tempSelected = <Product>{};
 
-          return AlertDialog(
-            title: const Text('Select Add-ons'),
-            content: StatefulBuilder(
-              builder: (context, setState) {
-                return SizedBox(
-                  width: double.maxFinite,
-                  child: ListView(
-                    shrinkWrap: true,
-                    children:
-                        availableAddons.map((addon) {
-                          return CheckboxListTile(
-                            title: Text(
-                              '${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
-                            ),
-                            value: tempSelected.contains(addon),
-                            onChanged: (checked) {
-                              setState(() {
-                                if (checked == true) {
-                                  tempSelected.add(addon);
-                                } else {
-                                  tempSelected.remove(addon);
-                                }
-                              });
-                            },
-                          );
-                        }).toList(),
-                  ),
-                );
-              },
-            ),
-            actions: [
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(context, <Product>[]),
-              ),
-              ElevatedButton(
-                child: const Text('Add to Cart'),
-                onPressed: () => Navigator.pop(context, tempSelected.toList()),
-              ),
-            ],
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return Padding(
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: 32,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Select Add-ons',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 300,
+                      child: ListView(
+                        children:
+                            availableAddons.map((addon) {
+                              return CheckboxListTile(
+                                title: Text(
+                                  '${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
+                                ),
+                                value: tempSelected.contains(addon),
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked == true) {
+                                      tempSelected.add(addon);
+                                    } else {
+                                      tempSelected.remove(addon);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          child: const Text('Cancel'),
+                          onPressed: () => Navigator.pop(context, <Product>[]),
+                        ),
+                        ElevatedButton(
+                          child: const Text('Add to Cart'),
+                          onPressed:
+                              () =>
+                                  Navigator.pop(context, tempSelected.toList()),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
       );
 
-      if (result != null && result is List<Product>) {
+      if (result != null) {
         selectedAddons = result;
       }
     }

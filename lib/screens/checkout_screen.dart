@@ -15,20 +15,24 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _ordererController = TextEditingController();
+  final TextEditingController _tableNumberController = TextEditingController();
 
   void _confirmOrder() async {
     final cart = context.read<CartModel>();
     final orderer = _ordererController.text;
 
-    final orderItems = cart.items.map((item) {
-      return OrderItem(
-        name: item.product.name,
-        price: item.product.price,
-        quantity: item.quantity,
-        addons: item.addons.map((a) => a.name).toList(),
-        addonsPrice: item.addons.fold(0.0, (sum, a) => (sum as double)+ a.price) ?? 0.0,
-      );
-    }).toList();
+    final orderItems =
+        cart.items.map((item) {
+          return OrderItem(
+            name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity,
+            addons: item.addons.map((a) => a.name).toList(),
+            addonsPrice:
+                item.addons.fold(0.0, (sum, a) => (sum as double) + a.price) ??
+                0.0,
+          );
+        }).toList();
 
     final total = cart.total;
 
@@ -37,6 +41,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       total: total,
       time: DateTime.now(),
       orderer: orderer,
+      tableNumber: _tableNumberController.text,
+      status: 'unpaid', // by default
     );
 
     final box = Hive.box<Order>('orders');
@@ -46,21 +52,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Order Saved'),
-        content: Text(
-          'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
-          'Total: Rp ${total.toStringAsFixed(0)}',
-        ),
-        actions: [
-          TextButton(
-            child: const Text('OK'),
-            onPressed: () {
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Order Saved'),
+            content: Text(
+              'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
+              'Total: Rp ${total.toStringAsFixed(0)}',
+            ),
+            actions: [
+              TextButton(
+                child: const Text('OK'),
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -81,14 +88,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   final item = cart.items[index];
                   return ListTile(
                     title: Text('${item.product.name} x ${item.quantity}'),
-                    subtitle: (item.addons.isNotEmpty)
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: item.addons
-                                .map((addon) => Text('- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})'))
-                                .toList(),
-                          )
-                        : null,
+                    subtitle:
+                        (item.addons.isNotEmpty)
+                            ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children:
+                                  item.addons
+                                      .map(
+                                        (addon) => Text(
+                                          '- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
+                                        ),
+                                      )
+                                      .toList(),
+                            )
+                            : null,
                     trailing: Text('Rp ${item.totalPrice.toStringAsFixed(0)}'),
                   );
                 },
@@ -102,6 +115,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            TextField(
+              controller: _ordererController,
+              decoration: const InputDecoration(
+                labelText: 'Orderer / Name (optional)',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _tableNumberController,
+              decoration: const InputDecoration(
+                labelText: 'Table Number (optional)',
+              ),
+            ),
+
             Text(
               'Total: Rp ${cart.total.toStringAsFixed(0)}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
