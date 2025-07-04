@@ -9,6 +9,7 @@ import 'screens/order_screen.dart';
 import 'screens/bills_screen.dart';
 import 'screens/daily_recap_screen.dart';
 import 'screens/product_management_screen.dart';
+import  'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,9 +43,12 @@ class RestaurantPOSApp extends StatelessWidget {
     return MaterialApp(
       title: 'Restaurant POS',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home:  OrderScreen(),
+      // home:  OrderScreen(),
+      initialRoute: '/',
       debugShowCheckedModeBanner: false,
       routes: {
+        '/': (context) => const SplashScreen(),
+        '/order': (context) => const OrderScreen(),
         '/bills': (context) => const BillsScreen(),
         '/recap': (context) => const DailyRecapScreen(),
         '/products': (context) => const ProductManagementScreen(),

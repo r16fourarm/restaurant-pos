@@ -65,64 +65,42 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
     return map;
   }
 
-  Future<void> _confirmAndExportCSV(List<Order> filteredOrders) async {
-  String exportType = 'summary';
-
-  final confirm = await showDialog<bool>(
+  Future<void> _confirmAndExportCSV(BuildContext context) async {
+  String? selectedFormat = await showDialog<String>(
     context: context,
     builder: (context) {
-      return AlertDialog(
-        title: const Text('Export Daily Recap'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Choose the format to export:'),
-            const SizedBox(height: 8),
-            RadioListTile(
-              value: 'summary',
-              groupValue: exportType,
-              onChanged: (value) {
-                exportType = value!;
-                (context as Element).markNeedsBuild();
-              },
-              title: const Text('Summary (Per Order)'),
-            ),
-            RadioListTile(
-              value: 'detail',
-              groupValue: exportType,
-              onChanged: (value) {
-                exportType = value!;
-                (context as Element).markNeedsBuild();
-              },
-              title: const Text('Detailed (Per Item)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      return SimpleDialog(
+        title: const Text('Choose Export Format'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'summary'),
+            child: const Text('📊 Daily Summary'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Export'),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'order'),
+            child: const Text('📦 Per Order Details'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'item'),
+            child: const Text('🍽️ Per Item Details'),
           ),
         ],
       );
     },
   );
 
-  if (confirm == true) {
-    await _exportCSV(context, filteredOrders, exportType);
+  if (selectedFormat != null) {
+    await _exportCSV(context, selectedFormat);
   }
 }
 
 
-Future<void> _exportCSV(
-    BuildContext context, List<Order> orders, String type) async {
+Future<void> _exportCSV(BuildContext context, String format) async {
   try {
+    final orders = _getFilteredOrders();
     File file;
 
+    // Pick export path (desktop) or auto (mobile)
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       final outputPath = await FilePicker.platform.getDirectoryPath();
       if (outputPath == null) {
@@ -132,9 +110,12 @@ Future<void> _exportCSV(
         return;
       }
 
-      file = type == 'detail'
-          ? await exportRecapDetailToCSV(orders: orders, customPath: outputPath)
-          : await exportRecapSummaryToCSV(orders: orders, customPath: outputPath);
+      // Use different filename based on format
+      file = await exportRecapToCSV(
+        orders: orders,
+        customPath: outputPath,
+        format: format,
+      );
 
       final result = await OpenFile.open(file.path);
       if (result.type != ResultType.done) {
@@ -143,9 +124,7 @@ Future<void> _exportCSV(
         );
       }
     } else {
-      file = type == 'detail'
-          ? await exportRecapDetailToCSV(orders: orders)
-          : await exportRecapSummaryToCSV(orders: orders);
+      file = await exportRecapToCSV(orders: orders, format: format);
       await Share.shareXFiles([XFile(file.path)], text: '📊 Daily Recap CSV');
     }
   } catch (e) {
@@ -223,7 +202,7 @@ Future<void> _exportCSV(
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.download),
         label: const Text('Export CSV'),
-        onPressed: () => _confirmAndExportCSV(filteredOrders),
+        onPressed: () => _confirmAndExportCSV(context),
       ),
     );
   }
