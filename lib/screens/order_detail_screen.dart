@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/order.dart';
-// import '../models/order_item.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/cart_model.dart';
@@ -14,7 +13,6 @@ class OrderDetailScreen extends StatelessWidget {
 
   void _reorder(BuildContext context) {
     final cart = context.read<CartModel>();
-
     for (var item in order.items) {
       final mainProduct = Product(
         name: item.name,
@@ -22,7 +20,6 @@ class OrderDetailScreen extends StatelessWidget {
         category: 'Restored',
         isAddon: false,
       );
-
       final addonProducts = item.addons.map((addonName) {
         return Product(
           name: addonName,
@@ -31,20 +28,15 @@ class OrderDetailScreen extends StatelessWidget {
           isAddon: true,
         );
       }).toList();
-
-      cart.addItem(
-        CartItem(
-          product: mainProduct,
-          quantity: item.quantity,
-          addons: addonProducts,
-        ),
-      );
+      cart.addItem(CartItem(
+        product: mainProduct,
+        quantity: item.quantity,
+        addons: addonProducts,
+      ));
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Items added to cart')),
     );
-
     Navigator.pop(context, 'reordered');
   }
 
@@ -97,13 +89,20 @@ class OrderDetailScreen extends StatelessWidget {
     );
 
     if (result == 'updated') {
-      Navigator.pop(context, 'updated'); // Return result to BillsScreen
+      Navigator.pop(context, 'updated');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isPaid = order.status == 'paid';
+    final isCatering = order.mode == 'catering';
+
+    // Format event date if present
+    String? readableEventDate;
+    if (order.eventDate != null) {
+      readableEventDate = DateFormat('yyyy-MM-dd').format(order.eventDate!);
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Order Details')),
@@ -112,16 +111,51 @@ class OrderDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Orderer: ${order.orderer.isEmpty ? '-' : order.orderer}',
-                style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 4),
-            Text('Table: ${order.tableNumber ?? '-'}',
-                style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 4),
-            Text(
-              'Created: ${DateFormat('yyyy-MM-dd – HH:mm').format(order.time)}',
-              style: const TextStyle(fontSize: 16),
+            // Mode badge
+            Row(
+              children: [
+                Chip(
+                  label: Text(
+                    order.mode.toUpperCase(),
+                    style: TextStyle(
+                      color: isCatering ? Colors.purple : Colors.green[800],
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  backgroundColor: isCatering ? Colors.purple[50] : Colors.green[50],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Orderer: ${order.orderer.isEmpty ? '-' : order.orderer}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
+            if (order.tableNumber?.isNotEmpty == true)
+              Text('Table: ${order.tableNumber}', style: const TextStyle(fontSize: 16)),
+            // Catering specific fields
+            if (isCatering &&
+                (order.eventDate != null ||
+                    (order.customerPhone?.isNotEmpty ?? false) ||
+                    (order.notes?.isNotEmpty ?? false)))
+              ...[
+                const SizedBox(height: 6),
+                if (order.eventDate != null)
+                  Text('Event Date: $readableEventDate',
+                      style: const TextStyle(fontSize: 16, color: Colors.deepPurple)),
+                if (order.customerPhone?.isNotEmpty ?? false)
+                  Text('Customer Phone: ${order.customerPhone}',
+                      style: const TextStyle(fontSize: 16, color: Colors.deepPurple)),
+                if (order.notes?.isNotEmpty ?? false)
+                  Text('PIC/Notes: ${order.notes}',
+                      style: const TextStyle(fontSize: 15, fontStyle: FontStyle.italic)),
+              ],
+            const SizedBox(height: 4),
+            Text('Created: ${DateFormat('yyyy-MM-dd – HH:mm').format(order.time)}', style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 4),
             Text(
               'Status: ${order.status.toUpperCase()}',
@@ -149,28 +183,16 @@ class OrderDetailScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${item.name} x${item.quantity}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
+                          Text('${item.name} x${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 4),
                           Text('Rp ${item.price.toStringAsFixed(0)}'),
                           if (item.addons.isNotEmpty) ...[
                             const SizedBox(height: 6),
-                            const Text('Add-ons:',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            ...item.addons
-                                .map((addonName) => Text('- $addonName')),
+                            const Text('Add-ons:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ...item.addons.map((addonName) => Text('- $addonName')),
                           ],
                           const SizedBox(height: 6),
-                          Text(
-                            'Subtotal: Rp ${item.total.toStringAsFixed(0)}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          Text('Subtotal: Rp ${item.total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -182,12 +204,8 @@ class OrderDetailScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total:',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text('Rp ${order.total.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('Rp ${order.total.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 16),

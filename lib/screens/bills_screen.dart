@@ -1,4 +1,3 @@
-// lib/screens/bills_screen.dart
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +15,7 @@ class _BillsScreenState extends State<BillsScreen> {
   late Box<Order> _orderBox;
   DateTime? _selectedDate;
   String _statusFilter = 'all'; // 'all', 'paid', 'unpaid'
+  String _modeFilter = 'all';   // <-- New: 'all', 'restaurant', 'catering'
 
   @override
   void initState() {
@@ -31,25 +31,24 @@ class _BillsScreenState extends State<BillsScreen> {
   void _clearAllOrders() {
     showDialog(
       context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Clear All Orders?'),
-            content: const Text('This will delete all saved orders.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  _orderBox.clear();
-                  Navigator.pop(context);
-                  setState(() {});
-                },
-                child: const Text('Confirm'),
-              ),
-            ],
+      builder: (_) => AlertDialog(
+        title: const Text('Clear All Orders?'),
+        content: const Text('This will delete all saved orders.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
+          TextButton(
+            onPressed: () {
+              _orderBox.clear();
+              Navigator.pop(context);
+              setState(() {});
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -77,16 +76,20 @@ class _BillsScreenState extends State<BillsScreen> {
 
   List<Order> _filterOrders(List<Order> orders) {
     return orders.where((order) {
-      final matchesDate =
-          _selectedDate == null
-              ? true
-              : DateFormat('yyyy-MM-dd').format(order.time) ==
-                  DateFormat('yyyy-MM-dd').format(_selectedDate!);
+      final matchesDate = _selectedDate == null
+          ? true
+          : DateFormat('yyyy-MM-dd').format(order.time) ==
+              DateFormat('yyyy-MM-dd').format(_selectedDate!);
 
       final matchesStatus =
           _statusFilter == 'all' || order.status == _statusFilter;
 
-      return matchesDate && matchesStatus;
+      final matchesMode =
+          _modeFilter == 'all' ||
+          order.mode == _modeFilter ||
+          (order.mode == 'both' && _modeFilter != 'all');
+
+      return matchesDate && matchesStatus && matchesMode;
     }).toList();
   }
 
@@ -99,18 +102,30 @@ class _BillsScreenState extends State<BillsScreen> {
       appBar: AppBar(
         title: const Text('Order History'),
         actions: [
+          // Mode filter dropdown
+          DropdownButton<String>(
+            value: _modeFilter,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            dropdownColor: Colors.blue[800],
+            borderRadius: BorderRadius.circular(10),
+            underline: Container(),
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text('All Modes')),
+              DropdownMenuItem(value: 'restaurant', child: Text('Restaurant')),
+              DropdownMenuItem(value: 'catering', child: Text('Catering')),
+              DropdownMenuItem(value: 'both', child: Text('Both')),
+            ],
+            onChanged: (val) => setState(() => _modeFilter = val ?? 'all'),
+            icon: const Icon(Icons.storefront, color: Colors.white),
+          ),
           PopupMenuButton<String>(
             tooltip: 'Filter by Status',
             onSelected: (value) => setState(() => _statusFilter = value),
-            itemBuilder:
-                (context) => [
-                  const PopupMenuItem(value: 'all', child: Text('Show All')),
-                  const PopupMenuItem(
-                    value: 'unpaid',
-                    child: Text('Unpaid Only'),
-                  ),
-                  const PopupMenuItem(value: 'paid', child: Text('Paid Only')),
-                ],
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'all', child: Text('Show All')),
+              const PopupMenuItem(value: 'unpaid', child: Text('Unpaid Only')),
+              const PopupMenuItem(value: 'paid', child: Text('Paid Only')),
+            ],
             icon: const Icon(Icons.filter_list),
           ),
           IconButton(
@@ -132,90 +147,112 @@ class _BillsScreenState extends State<BillsScreen> {
             ),
         ],
       ),
-      body:
-          filtered.isEmpty
-              ? const Center(child: Text('No orders found.'))
-              : ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final order = filtered[index];
-                  return ListTile(
-                    title: Text(
-                      order.orderer.isNotEmpty
-                          ? 'Order by ${order.orderer}'
-                          : 'Unnamed Order',
-                    ),
-                    subtitle: Text(
-                      '${DateFormat('yyyy-MM-dd – HH:mm').format(order.time)}\n'
-                      'Rp ${order.total.toStringAsFixed(0)} • ${order.status.toUpperCase()}',
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () {
-                        final originalIndex = orders.indexOf(order);
+      body: filtered.isEmpty
+          ? const Center(child: Text('No orders found.'))
+          : ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final order = filtered[index];
+                final isCatering = order.mode == 'catering';
 
-                        if (order.status == 'paid') {
-                          showDialog(
-                            context: context,
-                            builder:
-                                (_) => AlertDialog(
-                                  title: const Text('Cannot Delete Paid Bill'),
-                                  content: const Text(
-                                    'This bill is already marked as paid and cannot be deleted.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text('OK'),
-                                      onPressed: () => Navigator.pop(context),
-                                    ),
-                                  ],
-                                ),
-                          );
-                        } else {
-                          showDialog(
-                            context: context,
-                            builder:
-                                (_) => AlertDialog(
-                                  title: const Text('Delete Order?'),
-                                  content: const Text(
-                                    'Are you sure you want to delete this unpaid order?',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text('Cancel'),
-                                      onPressed: () => Navigator.pop(context),
-                                    ),
-                                    TextButton(
-                                      child: const Text('Delete'),
-                                      onPressed: () {
-                                        _deleteOrder(originalIndex);
-                                        Navigator.pop(context);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                          );
-                        }
-                      },
+                // Format catering fields
+                String eventDateStr = '';
+                if (isCatering && order.eventDate != null) {
+                  eventDateStr = 'Event: ${order.eventDate}';
+                }
+                String customerPhoneStr = '';
+                if (isCatering && order.customerPhone != null && order.customerPhone!.isNotEmpty) {
+                  customerPhoneStr = 'Phone: ${order.customerPhone}';
+                }
+
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isCatering ? Colors.purple[100] : Colors.green[100],
+                      borderRadius: BorderRadius.circular(6),
                     ),
+                    child: Text(
+                      order.mode == 'catering' ? 'CATERING' : (order.mode == 'restaurant' ? 'RESTO' : 'BOTH'),
+                      style: TextStyle(
+                        color: isCatering ? Colors.purple : Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    order.orderer.isNotEmpty ? 'Order by ${order.orderer}' : 'Unnamed Order',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${DateFormat('yyyy-MM-dd – HH:mm').format(order.time)} | Rp ${order.total.toStringAsFixed(0)} • ${order.status.toUpperCase()}'),
+                      if (isCatering && eventDateStr.isNotEmpty)
+                        Text(eventDateStr, style: const TextStyle(fontSize: 13, color: Colors.deepPurple)),
+                      if (isCatering && customerPhoneStr.isNotEmpty)
+                        Text(customerPhoneStr, style: const TextStyle(fontSize: 13, color: Colors.deepPurple)),
+                    ],
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () {
+                      final originalIndex = orders.indexOf(order);
 
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => OrderDetailScreen(order: order),
-                        ),
-                      );
-
-                      if (result == 'reordered' || result == 'updated') {
-                        // If the order was reordered or updated, refresh the list
-                        // If the order was reordered or deleted, refresh the list
-                        setState(() {});
+                      if (order.status == 'paid') {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Cannot Delete Paid Bill'),
+                            content: const Text('This bill is already marked as paid and cannot be deleted.'),
+                            actions: [
+                              TextButton(
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else {
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Delete Order?'),
+                            content: const Text('Are you sure you want to delete this unpaid order?'),
+                            actions: [
+                              TextButton(
+                                child: const Text('Cancel'),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                              TextButton(
+                                child: const Text('Delete'),
+                                onPressed: () {
+                                  _deleteOrder(originalIndex);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ],
+                          ),
+                        );
                       }
                     },
-                  );
-                },
-              ),
+                  ),
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => OrderDetailScreen(order: order),
+                      ),
+                    );
+                    if (result == 'reordered' || result == 'updated') {
+                      setState(() {});
+                    }
+                  },
+                );
+              },
+            ),
     );
   }
 }

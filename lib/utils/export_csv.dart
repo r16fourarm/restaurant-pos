@@ -6,7 +6,7 @@ import '../models/order.dart';
 
 Future<File> exportRecapToCSV({
   required List<Order> orders,
-  String format = 'summary', // Options: 'summary', 'order', 'item'
+  String format = 'summary', // 'summary', 'order', 'item'
   String? customPath,
 }) async {
   final now = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
@@ -22,11 +22,9 @@ Future<File> exportRecapToCSV({
       case 'order':
         csvData = _buildOrderFormat(orders, formatter);
         break;
-
       case 'item':
         csvData = _buildItemFormat(orders, formatter);
         break;
-
       case 'summary':
       default:
         csvData = _buildSummaryFormat(orders, formatter);
@@ -48,7 +46,18 @@ List<List<dynamic>> _buildOrderFormat(
   NumberFormat formatter,
 ) {
   return [
-    ['Date', 'Orderer', 'Table', 'Status', 'Total (Rp)', 'Payment Method'],
+    [
+      'Date',
+      'Orderer',
+      'Table',
+      'Status',
+      'Total (Rp)',
+      'Payment Method',
+      'Mode',
+      'Event Date',
+      'Customer Phone',
+      'Notes',
+    ],
     ...orders.map(
       (o) => [
         DateFormat('yyyy-MM-dd HH:mm').format(o.time),
@@ -57,6 +66,10 @@ List<List<dynamic>> _buildOrderFormat(
         o.status,
         formatter.format(o.total),
         o.paymentMethod ?? '-',
+        o.mode,
+        o.eventDate ?? '',
+        o.customerPhone ?? '',
+        o.notes ?? '',
       ],
     ),
   ];
@@ -70,6 +83,10 @@ List<List<dynamic>> _buildItemFormat(
     [
       'Date',
       'Orderer',
+      'Mode',
+      'Event Date',
+      'Customer Phone',
+      'Notes',
       'Item',
       'Qty',
       'Price (Rp)',
@@ -83,6 +100,12 @@ List<List<dynamic>> _buildItemFormat(
       data.add([
         DateFormat('yyyy-MM-dd HH:mm').format(order.time),
         order.orderer,
+        order.mode,
+        order.eventDate != null
+            ? DateFormat('yyyy-MM-dd').format(order.eventDate!)
+            : '',
+        order.customerPhone ?? '',
+        order.notes ?? '',
         item.name,
         item.quantity.toString(),
         formatter.format(item.price),
@@ -91,11 +114,13 @@ List<List<dynamic>> _buildItemFormat(
       ]);
     }
   }
-
   return data;
 }
 
-List<List<dynamic>> _buildSummaryFormat(List<Order> orders, NumberFormat formatter) {
+List<List<dynamic>> _buildSummaryFormat(
+  List<Order> orders,
+  NumberFormat formatter,
+) {
   final grouped = <String, List<Order>>{};
   for (final order in orders) {
     final dateKey = DateFormat('yyyy-MM-dd').format(order.time);
@@ -103,18 +128,30 @@ List<List<dynamic>> _buildSummaryFormat(List<Order> orders, NumberFormat formatt
   }
 
   final data = [
-    ['Date', 'Orders', 'Paid (Rp)', 'Unpaid (Rp)', 'Total (Rp)'],
+    [
+      'Date',
+      'Orders',
+      'Paid (Rp)',
+      'Unpaid (Rp)',
+      'Total (Rp)',
+      'Catering Orders',
+      'Restaurant Orders',
+    ],
   ];
 
-  int totalOrders = 0;
+  int totalOrders = 0, cateringOrders = 0, restaurantOrders = 0;
   double totalPaid = 0, totalUnpaid = 0, totalAll = 0;
 
   for (final entry in grouped.entries) {
     final date = entry.key;
     final dayOrders = entry.value;
     final total = dayOrders.fold(0.0, (sum, o) => sum + o.total);
-    final paid = dayOrders.where((o) => o.status == 'paid').fold(0.0, (sum, o) => sum + o.total);
+    final paid = dayOrders
+        .where((o) => o.status == 'paid')
+        .fold(0.0, (sum, o) => sum + o.total);
     final unpaid = total - paid;
+    final catering = dayOrders.where((o) => o.mode == 'catering').length;
+    final resto = dayOrders.where((o) => o.mode == 'restaurant').length;
 
     data.add([
       date,
@@ -122,9 +159,13 @@ List<List<dynamic>> _buildSummaryFormat(List<Order> orders, NumberFormat formatt
       formatter.format(paid),
       formatter.format(unpaid),
       formatter.format(total),
+      catering.toString(),
+      resto.toString(),
     ]);
 
     totalOrders += dayOrders.length;
+    cateringOrders += catering;
+    restaurantOrders += resto;
     totalPaid += paid;
     totalUnpaid += unpaid;
     totalAll += total;
@@ -137,6 +178,8 @@ List<List<dynamic>> _buildSummaryFormat(List<Order> orders, NumberFormat formatt
     formatter.format(totalPaid),
     formatter.format(totalUnpaid),
     formatter.format(totalAll),
+    cateringOrders.toString(),
+    restaurantOrders.toString(),
   ]);
 
   // Add payment breakdown section
@@ -158,4 +201,3 @@ List<List<dynamic>> _buildSummaryFormat(List<Order> orders, NumberFormat formatt
 
   return data;
 }
-

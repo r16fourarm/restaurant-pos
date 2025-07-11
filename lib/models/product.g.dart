@@ -22,13 +22,14 @@ class ProductAdapter extends TypeAdapter<Product> {
       category: fields[2] as String,
       isAddon: fields[3] as bool,
       addonCategory: fields[4] as String?,
+      mode: fields[5] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, Product obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class ProductAdapter extends TypeAdapter<Product> {
       ..writeByte(3)
       ..write(obj.isAddon)
       ..writeByte(4)
-      ..write(obj.addonCategory);
+      ..write(obj.addonCategory)
+      ..writeByte(5)
+      ..write(obj.mode);
   }
 
   @override

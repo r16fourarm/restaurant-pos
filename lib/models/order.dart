@@ -19,7 +19,7 @@ class Order extends HiveObject {
   String orderer;
 
   @HiveField(4)
-  String? tableNumber; // new
+  String? tableNumber;
 
   @HiveField(5)
   String status; // 'unpaid' or 'paid'
@@ -30,14 +30,30 @@ class Order extends HiveObject {
   @HiveField(7)
   DateTime? paymentTime; // when paid
 
+  @HiveField(8)
+  String mode; // 'restaurant', 'catering', 'both'
+
+  @HiveField(9)
+  DateTime? eventDate; // <-- refactored to DateTime!
+
+  @HiveField(10)
+  String? customerPhone;
+
+  @HiveField(11)
+  String? notes;
+
   Order({
     required this.items,
     required this.total,
     required this.time,
     required this.orderer,
+    required this.mode,
     this.tableNumber,
     this.status = 'unpaid',
     this.paymentMethod,
     this.paymentTime,
+    this.eventDate,      // <-- Now DateTime?
+    this.customerPhone,
+    this.notes,
   });
 }

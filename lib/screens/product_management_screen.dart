@@ -17,6 +17,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
   String _category = 'Food';
   bool _isAddon = false;
   String? _addonCategory;
+  String _mode = 'both'; // restaurant, catering, or both
   Product? _editingProduct;
 
   void _showForm([Product? product]) {
@@ -27,6 +28,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       _category = product.category;
       _isAddon = product.isAddon;
       _addonCategory = product.addonCategory;
+      _mode = product.mode;
     } else {
       _editingProduct = null;
       _nameController.clear();
@@ -34,6 +36,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       _category = 'Food';
       _isAddon = false;
       _addonCategory = null;
+      _mode = 'both';
     }
 
     showDialog(
@@ -66,6 +69,16 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                           .toList(),
                       onChanged: (val) => setState(() => _category = val!),
                       decoration: const InputDecoration(labelText: 'Category'),
+                    ),
+                    DropdownButtonFormField<String>(
+                      value: _mode,
+                      items: [
+                        DropdownMenuItem(value: 'restaurant', child: Text('Restaurant')),
+                        DropdownMenuItem(value: 'catering', child: Text('Catering')),
+                        DropdownMenuItem(value: 'both', child: Text('Both')),
+                      ],
+                      onChanged: (val) => setState(() => _mode = val ?? 'both'),
+                      decoration: const InputDecoration(labelText: 'Product Mode'),
                     ),
                     CheckboxListTile(
                       value: _isAddon,
@@ -110,6 +123,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                         ..category = _category
                         ..isAddon = _isAddon
                         ..addonCategory = _isAddon ? _addonCategory : null
+                        ..mode = _mode
                         ..save();
                     } else {
                       Hive.box<Product>('products').add(
@@ -119,6 +133,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                           category: _category,
                           isAddon: _isAddon,
                           addonCategory: _isAddon ? _addonCategory : null,
+                          mode: _mode,
                         ),
                       );
                     }
@@ -162,7 +177,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
     return ListTile(
       title: Text(product.name),
       subtitle: Text(
-        'Rp ${product.price.toStringAsFixed(0)} • ${product.category}'
+        'Rp ${product.price.toStringAsFixed(0)} • ${product.category} • Mode: ${product.mode}'
         '${product.isAddon ? ' • Add-on for ${product.addonCategory ?? '-'}' : ''}',
       ),
       trailing: Row(
