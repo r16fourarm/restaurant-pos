@@ -75,7 +75,7 @@ Currently in beta testing.
    Use the recap feature to export sales data to CSV for reporting.
 
 5. **Feedback:**  
-   Fill out the [Google Feedback Form](https://your-google-form-link) after testing.
+   Fill out the [Google Feedback Form](https://docs.google.com/forms/d/e/1FAIpQLSfBFYPHooDOInXRSlnc0bhfbAzWIQXpfPP2dHOL54UBXyKmTw/viewform) after testing.
 
 ---
 

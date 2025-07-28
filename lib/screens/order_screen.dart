@@ -8,6 +8,8 @@ import '../models/product.dart';
 import 'cart_screen.dart';
 import '../app_mode_provider.dart';
 
+// ...[imports remain unchanged]...
+
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});
 
@@ -19,6 +21,37 @@ class _OrderScreenState extends State<OrderScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _selectedCategory = 'All';
+
+  // Add-to-cart dialog
+  Future<void> _showAddToCartDialog(BuildContext context, Product product) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            SizedBox(width: 10),
+            Text('Added to Cart'),
+          ],
+        ),
+        content: Text('Product "${product.name}" has been added to the cart.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Continue Shopping'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _goToCart(context);
+            },
+            child: Text('Go to Cart'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _addToCart(BuildContext context, Product product) async {
     if (product.isAddon) return;
@@ -113,15 +146,13 @@ class _OrderScreenState extends State<OrderScreen> {
       }
     }
 
-    // ✅ Move cart.addItem and feedback here:
     final cart = context.read<CartModel>();
     cart.addItem(
       CartItem(product: product, quantity: 1, addons: selectedAddons),
     );
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${product.name} added to cart')));
+    // Show new add-to-cart dialog
+    await _showAddToCartDialog(context, product);
   }
 
   void _goToCart(BuildContext context) {
@@ -163,10 +194,58 @@ class _OrderScreenState extends State<OrderScreen> {
             tooltip: 'Recap',
             onPressed: () => _goToRecap(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.shopping_cart),
-            onPressed: () => _goToCart(context),
+          // ---- Cart Icon with Red Badge ----
+          Consumer<CartModel>(
+            builder: (context, cart, child) {
+              int cartCount = cart.items.fold(0, (p, e) => p + e.quantity);
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.shopping_cart),
+                    onPressed: () => _goToCart(context),
+                  ),
+                  if (cartCount > 0)
+                    Positioned(
+                      right: 6,
+                      top: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 5,
+                          minHeight: 5,
+                        ),
+                        child: Text(
+                          '$cartCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
+          // ---- Mode Icon with Hover Color ----
+          Consumer<AppModeProvider>(
+            builder: (context, modeProvider, child) {
+              return _HoverableModeIcon(
+                isRestaurant: modeProvider.mode == 'restaurant',
+                onPressed: () {
+                  // Optional: could open mode switcher dialog
+                },
+              );
+            },
+          ),
+          // ---- Mode Switcher Dropdown ----
           Consumer2<AppModeProvider, CartModel>(
             builder: (context, modeProvider, cart, child) {
               return Padding(
@@ -175,7 +254,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   child: DropdownButton<String>(
                     value: modeProvider.mode,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Colors.black87,
                       fontWeight: FontWeight.bold,
                     ),
                     dropdownColor: Colors.blue[800],
@@ -193,7 +272,6 @@ class _OrderScreenState extends State<OrderScreen> {
                     onChanged: (val) async {
                       if (val == null || val == modeProvider.mode) return;
 
-                      // Only warn/clear if there are items in cart
                       if (cart.items.isNotEmpty) {
                         final confirmed = await showDialog<bool>(
                           context: context,
@@ -220,7 +298,6 @@ class _OrderScreenState extends State<OrderScreen> {
                         if (confirmed != true) return;
                         cart.clear();
                       }
-
                       modeProvider.setMode(val);
                     },
                     icon: const Icon(Icons.swap_horiz, color: Colors.white),
@@ -333,6 +410,43 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 }
 
+// ---- Mode Icon with Hover Color Widget ----
+class _HoverableModeIcon extends StatefulWidget {
+  final bool isRestaurant;
+  final VoidCallback onPressed;
+  const _HoverableModeIcon({
+    required this.isRestaurant,
+    required this.onPressed,
+  });
+
+  @override
+  State<_HoverableModeIcon> createState() => _HoverableModeIconState();
+}
+
+class _HoverableModeIconState extends State<_HoverableModeIcon> {
+  bool isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color normalColor = Colors.white;
+    final Color hoverColor = Colors.amber; // Customize as needed!
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => isHovered = true),
+      onExit: (_) => setState(() => isHovered = false),
+      child: IconButton(
+        icon: Icon(
+          widget.isRestaurant ? Icons.restaurant : Icons.local_shipping,
+          color: isHovered ? hoverColor : normalColor,
+        ),
+        onPressed: widget.onPressed,
+        tooltip: widget.isRestaurant ? 'Switch to Catering' : 'Switch to Restaurant',
+      ),
+    );
+  }
+}
+
+// ---- Product Card with Border on Hover ----
 class _ProductCard extends StatefulWidget {
   final Product product;
   final VoidCallback onTap;
@@ -359,6 +473,10 @@ class _ProductCardState extends State<_ProductCard> {
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isHovered ? Colors.blueAccent : Colors.grey.shade300,
+              width: 2,
+            ),
             boxShadow:
                 isHovered
                     ? [
