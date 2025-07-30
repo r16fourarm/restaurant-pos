@@ -18,6 +18,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _ordererController = TextEditingController();
   final TextEditingController _tableNumberController = TextEditingController();
 
+  // Payment status
+  String _paymentStatus = 'paid'; // 'paid' or 'unpaid'
+  String _paymentMethod = 'Cash';
+  final TextEditingController _amountReceivedController = TextEditingController();
+  double _change = 0.0;
+
   // Catering-specific fields
   DateTime? _eventDate;
   final TextEditingController _customerPhoneController = TextEditingController();
@@ -36,9 +42,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  void _confirmOrder() async {
+  void _updateChange(double total) {
+    final amount = double.tryParse(_amountReceivedController.text) ?? 0.0;
+    setState(() => _change = amount - total);
+  }
+
+  Future<void> _confirmOrder() async {
     final cart = context.read<CartModel>();
     final orderer = _ordererController.text;
+    final total = cart.total;
+
+    // If Pay Now, validate payment
+    double amountReceived = 0.0;
+    if (_paymentStatus == 'paid') {
+      amountReceived = double.tryParse(_amountReceivedController.text) ?? 0.0;
+      if (amountReceived < total) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Amount received is less than total!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
 
     final orderItems = cart.items.map((item) {
       return OrderItem(
@@ -51,7 +78,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }).toList();
 
-    final total = cart.total;
     final appMode = context.read<AppModeProvider>().mode;
 
     // Catering fields (only for catering)
@@ -74,10 +100,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       tableNumber: _tableNumberController.text.isNotEmpty
           ? _tableNumberController.text
           : null,
-      status: 'unpaid',
+      status: _paymentStatus,
       eventDate: eventDate,
       customerPhone: customerPhone,
       notes: notes,
+      paymentTime: DateTime.now(),
+      paymentMethod: _paymentStatus == 'paid' ? _paymentMethod : null,
+      amountReceived: _paymentStatus == 'paid' ? amountReceived : 0.0,
+      change: _paymentStatus == 'paid' ? _change : 0.0,
     );
 
     final box = Hive.box<Order>('orders');
@@ -88,11 +118,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Order Saved'),
-        content: Text(
-          'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
-          'Total: Rp ${total.toStringAsFixed(0)}',
-        ),
+        title: Text(_paymentStatus == 'paid' ? 'Order Finalized' : 'Order Saved'),
+        content: Text(_paymentStatus == 'paid'
+            ? 'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
+              'Total: Rp ${total.toStringAsFixed(0)}\n'
+              'Paid: Rp ${amountReceived.toStringAsFixed(0)}\n'
+              'Change: Rp ${_change.toStringAsFixed(0)}'
+            : 'Order saved as UNPAID.\nCustomer can pay later.'),
         actions: [
           TextButton(
             child: const Text('OK'),
@@ -109,6 +141,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cart = context.watch<CartModel>();
     final appMode = context.watch<AppModeProvider>().mode;
+    final total = cart.total;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
@@ -192,6 +225,72 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 maxLines: 2,
               ),
             ],
+            const SizedBox(height: 8),
+
+            // Payment status selection
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<String>(
+                    value: 'paid',
+                    groupValue: _paymentStatus,
+                    onChanged: (val) {
+                      setState(() => _paymentStatus = val!);
+                    },
+                    title: const Text('Pay Now'),
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile<String>(
+                    value: 'unpaid',
+                    groupValue: _paymentStatus,
+                    onChanged: (val) {
+                      setState(() => _paymentStatus = val!);
+                    },
+                    title: const Text('Pay Later'),
+                  ),
+                ),
+              ],
+            ),
+
+            // Only show payment fields if "Pay Now" is selected
+            if (_paymentStatus == 'paid') ...[
+              DropdownButtonFormField<String>(
+                value: _paymentMethod,
+                decoration: const InputDecoration(labelText: "Payment Method"),
+                items: ['Cash', 'QRIS', 'EDC', 'Other']
+                    .map((method) =>
+                        DropdownMenuItem(value: method, child: Text(method)))
+                    .toList(),
+                onChanged: (v) {
+                  setState(() {
+                    _paymentMethod = v ?? 'Cash';
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _amountReceivedController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Amount Received"),
+                onChanged: (_) => _updateChange(total),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Text('Change:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 8),
+                  Text(
+                    _change >= 0 ? 'Rp ${_change.toStringAsFixed(0)}' : '-',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _change < 0 ? Colors.red : Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 16),
             Text(
               'Total: Rp ${cart.total.toStringAsFixed(0)}',
@@ -200,7 +299,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _confirmOrder,
-              child: const Text('Confirm Order'),
+              child: Text(_paymentStatus == 'paid'
+                  ? 'Confirm & Finalize'
+                  : 'Save as Unpaid'),
             ),
           ],
         ),

@@ -7,6 +7,7 @@ import '../models/cart_item.dart';
 import '../models/product.dart';
 import 'cart_screen.dart';
 import '../app_mode_provider.dart';
+import 'dart:io';
 
 // ...[imports remain unchanged]...
 
@@ -22,42 +23,49 @@ class _OrderScreenState extends State<OrderScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
-  // Add-to-cart dialog
-  Future<void> _showAddToCartDialog(BuildContext context, Product product) async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 10),
-            Text('Added to Cart'),
-          ],
-        ),
-        content: Text('Product "${product.name}" has been added to the cart.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Continue Shopping'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _goToCart(context);
-            },
-            child: Text('Go to Cart'),
-          ),
-        ],
-      ),
-    );
-  }
+  // // Add-to-cart dialog
+  // Future<void> _showAddToCartDialog(
+  //   BuildContext context,
+  //   Product product,
+  // ) async {
+  //   await showDialog(
+  //     context: context,
+  //     builder:
+  //         (context) => AlertDialog(
+  //           shape: RoundedRectangleBorder(
+  //             borderRadius: BorderRadius.circular(16),
+  //           ),
+  //           title: Row(
+  //             children: [
+  //               Icon(Icons.check_circle, color: Colors.green, size: 28),
+  //               SizedBox(width: 10),
+  //               Text('Added to Cart'),
+  //             ],
+  //           ),
+  //           content: Text(
+  //             'Product "${product.name}" has been added to the cart.',
+  //           ),
+  //           actions: [
+  //             TextButton(
+  //               onPressed: () => Navigator.pop(context),
+  //               child: Text('Continue Shopping'),
+  //             ),
+  //             ElevatedButton(
+  //               onPressed: () {
+  //                 Navigator.pop(context);
+  //                 _goToCart(context);
+  //               },
+  //               child: Text('Go to Cart'),
+  //             ),
+  //           ],
+  //         ),
+  //   );
+  // }
 
   void _addToCart(BuildContext context, Product product) async {
     if (product.isAddon) return;
 
     final appMode = Provider.of<AppModeProvider>(context, listen: false).mode;
-
     final allProducts = Hive.box<Product>('products').values.toList();
     final availableAddons =
         allProducts.where((p) {
@@ -151,8 +159,23 @@ class _OrderScreenState extends State<OrderScreen> {
       CartItem(product: product, quantity: 1, addons: selectedAddons),
     );
 
-    // Show new add-to-cart dialog
-    await _showAddToCartDialog(context, product);
+    // Modern floating snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 20),
+            SizedBox(width: 8),
+            Expanded(child: Text('"${product.name}" added to cart!')),
+          ],
+        ),
+        backgroundColor: Colors.grey[900],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: Duration(seconds: 2),
+        margin: EdgeInsets.only(bottom: 80, left: 16, right: 16),
+      ),
+    );
   }
 
   void _goToCart(BuildContext context) {
@@ -182,15 +205,21 @@ class _OrderScreenState extends State<OrderScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => {Navigator.pushNamed(context, '/settings')},
+          ),
+          IconButton(
+            icon: const Icon(Icons.food_bank),
+            tooltip: 'Products',
             onPressed: () => _goToProducts(context),
           ),
           IconButton(
-            icon: const Icon(Icons.history),
+            icon: const Icon(Icons.note),
             tooltip: 'Bills',
             onPressed: () => _goToBills(context),
           ),
           IconButton(
-            icon: const Icon(Icons.bar_chart),
+            icon: const Icon(Icons.note_alt),
             tooltip: 'Recap',
             onPressed: () => _goToRecap(context),
           ),
@@ -203,6 +232,8 @@ class _OrderScreenState extends State<OrderScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.shopping_cart),
+                    tooltip: 'Cart',
+                    // color: cartCount > 0 ? Colors.red : Colors.white,
                     onPressed: () => _goToCart(context),
                   ),
                   if (cartCount > 0)
@@ -210,7 +241,10 @@ class _OrderScreenState extends State<OrderScreen> {
                       right: 6,
                       top: 2,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red,
                           borderRadius: BorderRadius.circular(10),
@@ -235,72 +269,89 @@ class _OrderScreenState extends State<OrderScreen> {
             },
           ),
           // ---- Mode Icon with Hover Color ----
-          Consumer<AppModeProvider>(
-            builder: (context, modeProvider, child) {
-              return _HoverableModeIcon(
-                isRestaurant: modeProvider.mode == 'restaurant',
-                onPressed: () {
-                  // Optional: could open mode switcher dialog
-                },
-              );
-            },
-          ),
+          // Consumer<AppModeProvider>(
+          //   builder: (context, modeProvider, child) {
+          //     return _HoverableModeIcon(
+          //       isRestaurant: modeProvider.mode == 'restaurant',
+          //       onPressed: () {
+          //         // Optional: could open mode switcher dialog
+          //       },
+          //     );
+          //   },
+          // ),
           // ---- Mode Switcher Dropdown ----
           Consumer2<AppModeProvider, CartModel>(
             builder: (context, modeProvider, cart, child) {
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: modeProvider.mode,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    dropdownColor: Colors.blue[800],
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue[700], // <-- Your custom background color
                     borderRadius: BorderRadius.circular(12),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'restaurant',
-                        child: Text('Restaurant'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'catering',
-                        child: Text('Catering'),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
                       ),
                     ],
-                    onChanged: (val) async {
-                      if (val == null || val == modeProvider.mode) return;
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 2,
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: modeProvider.mode,
+                      style: const TextStyle(
+                        color: Colors.white, // <-- Button text color
+                        fontWeight: FontWeight.bold,
+                      ),
+                      dropdownColor: Colors.blue[800],
+                      borderRadius: BorderRadius.circular(12),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'restaurant',
+                          child: Text('Restaurant'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'catering',
+                          child: Text('Catering'),
+                        ),
+                      ],
+                      onChanged: (val) async {
+                        if (val == null || val == modeProvider.mode) return;
 
-                      if (cart.items.isNotEmpty) {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder:
-                              (_) => AlertDialog(
-                                title: const Text('Switch Business Mode?'),
-                                content: const Text(
-                                  'Switching mode will clear the current cart. Continue?',
+                        if (cart.items.isNotEmpty) {
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder:
+                                (_) => AlertDialog(
+                                  title: const Text('Switch Business Mode?'),
+                                  content: const Text(
+                                    'Switching mode will clear the current cart. Continue?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      child: const Text('Cancel'),
+                                      onPressed:
+                                          () => Navigator.pop(context, false),
+                                    ),
+                                    ElevatedButton(
+                                      child: const Text('Continue'),
+                                      onPressed:
+                                          () => Navigator.pop(context, true),
+                                    ),
+                                  ],
                                 ),
-                                actions: [
-                                  TextButton(
-                                    child: const Text('Cancel'),
-                                    onPressed:
-                                        () => Navigator.pop(context, false),
-                                  ),
-                                  ElevatedButton(
-                                    child: const Text('Continue'),
-                                    onPressed:
-                                        () => Navigator.pop(context, true),
-                                  ),
-                                ],
-                              ),
-                        );
-                        if (confirmed != true) return;
-                        cart.clear();
-                      }
-                      modeProvider.setMode(val);
-                    },
-                    icon: const Icon(Icons.swap_horiz, color: Colors.white),
+                          );
+                          if (confirmed != true) return;
+                          cart.clear();
+                        }
+                        modeProvider.setMode(val);
+                      },
+                      icon: const Icon(Icons.swap_horiz, color: Colors.white),
+                    ),
                   ),
                 ),
               );
@@ -390,7 +441,7 @@ class _OrderScreenState extends State<OrderScreen> {
                                 maxCrossAxisExtent: 200,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
-                                childAspectRatio: 3 / 2,
+                                childAspectRatio: 0.9,
                               ),
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
@@ -440,7 +491,8 @@ class _HoverableModeIconState extends State<_HoverableModeIcon> {
           color: isHovered ? hoverColor : normalColor,
         ),
         onPressed: widget.onPressed,
-        tooltip: widget.isRestaurant ? 'Switch to Catering' : 'Switch to Restaurant',
+        tooltip:
+            widget.isRestaurant ? 'Switch to Catering' : 'Switch to Restaurant',
       ),
     );
   }
@@ -462,6 +514,8 @@ class _ProductCardState extends State<_ProductCard> {
 
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = widget.product.imagePath != null && widget.product.imagePath!.isNotEmpty;
+
     return MouseRegion(
       onEnter: (_) => setState(() => isHovered = true),
       onExit: (_) => setState(() => isHovered = false),
@@ -477,42 +531,61 @@ class _ProductCardState extends State<_ProductCard> {
               color: isHovered ? Colors.blueAccent : Colors.grey.shade300,
               width: 2,
             ),
-            boxShadow:
-                isHovered
-                    ? [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ]
-                    : [],
+            boxShadow: isHovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ]
+                : [],
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: widget.onTap,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // Image now expands but never overflows
+                  Expanded(
+                    child: hasPhoto
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(
+                              File(widget.product.imagePath!),
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.image, color: Colors.grey[500], size: 36),
+                          ),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     widget.product.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 15,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
                   Text(
                     'Rp ${widget.product.price.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     widget.product.category,
-                    style: const TextStyle(fontSize: 12),
+                    style: const TextStyle(fontSize: 11),
                   ),
                 ],
               ),

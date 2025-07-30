@@ -22,6 +22,9 @@ class Product extends HiveObject {
   @HiveField(5)
   String mode; // NEW: 'restaurant', 'catering', or 'both'
 
+  @HiveField(6)
+  String? imagePath; // Optional image URL for the product
+
   Product({
     required this.name,
     required this.price,
@@ -29,5 +32,6 @@ class Product extends HiveObject {
     this.isAddon = false,
     this.addonCategory,
     this.mode = 'both', // default = shared by both
+    this.imagePath = ''
   });
 }

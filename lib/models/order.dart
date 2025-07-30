@@ -42,6 +42,12 @@ class Order extends HiveObject {
   @HiveField(11)
   String? notes;
 
+  @HiveField(12)
+  double amountReceived; // Amount received from customer
+
+  @HiveField(13)
+  double change; // Change to return to customer
+
   Order({
     required this.items,
     required this.total,
@@ -55,5 +61,7 @@ class Order extends HiveObject {
     this.eventDate,      // <-- Now DateTime?
     this.customerPhone,
     this.notes,
+    this.amountReceived = 0.0,
+    this.change = 0.0,
   });
 }
