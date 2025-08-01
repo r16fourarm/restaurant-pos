@@ -237,7 +237,8 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
           DateTime.now().millisecondsSinceEpoch.toString() +
           '_' +
           file.uri.pathSegments.last;
-      final savedFile = await file.copy('${appDir.path}/$fileName');
+      final savedFile = await file.copy('${appDir.path}/RestaurantPOS_Thumbnails/$fileName');
+      print("Image saved to: $savedFile.path");
       return savedFile.path;
     }
     return null;

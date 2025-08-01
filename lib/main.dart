@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'app_mode_provider.dart';
 import 'models/product.dart';
 import 'models/order.dart';
@@ -14,7 +16,15 @@ import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
+
+  final appSupportDir = await getApplicationSupportDirectory();
+  // await Hive.initFlutter(appSupportDir.path);
+
+    // Use your own folder, e.g. "RestaurantPOS"
+  final myAppDir = Directory('${appSupportDir.parent.path}/RestaurantPOS');
+  if (!myAppDir.existsSync()) myAppDir.createSync();
+
+  await Hive.initFlutter(myAppDir.path);
 
   Hive.registerAdapter(OrderAdapter());
   Hive.registerAdapter(OrderItemAdapter()); // Register OrderItem adapter
@@ -27,14 +37,14 @@ void main() async {
   await Hive.openBox<Order>('orders'); // ✅ VERY IMPORTANT
   // await Hive.openBox<OrderItem>('orderItems'); // Open OrderItem box
   await Hive.openBox<Product>('products'); // Open Product box
+
   runApp(
     MultiProvider(
       providers: [
-         ChangeNotifierProvider(
+        ChangeNotifierProvider(
           create: (_) => AppModeProvider(),
         ), // <-- Add this
         ChangeNotifierProvider(create: (_) => CartModel()),
-
       ],
       child: const RestaurantPOSApp(),
     ),
