@@ -62,25 +62,26 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                         // Image picker
                         Column(
                           children: [
-                            _selectedImagePath != null && _selectedImagePath!.isNotEmpty
+                            _selectedImagePath != null &&
+                                    _selectedImagePath!.isNotEmpty
                                 ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.file(
-                                      File(_selectedImagePath!),
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  )
-                                : Container(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(
+                                    File(_selectedImagePath!),
                                     width: 100,
                                     height: 100,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.image, size: 40),
+                                    fit: BoxFit.cover,
                                   ),
+                                )
+                                : Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.image, size: 40),
+                                ),
                             TextButton.icon(
                               icon: const Icon(Icons.add_a_photo),
                               label: const Text('Add/Change Photo'),
@@ -233,11 +234,21 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
     if (result != null && result.files.single.path != null) {
       final file = File(result.files.single.path!);
       final appDir = await getApplicationDocumentsDirectory();
+      final thumbnailsDir = Directory(
+        '${appDir.path}/RestaurantPOS_Thumbnails',
+      );
+
+      // **Check & create folder if not exists**
+      if (!await thumbnailsDir.exists()) {
+        await thumbnailsDir.create(recursive: true);
+      }
       final fileName =
           DateTime.now().millisecondsSinceEpoch.toString() +
           '_' +
           file.uri.pathSegments.last;
-      final savedFile = await file.copy('${appDir.path}/RestaurantPOS_Thumbnails/$fileName');
+      final savedFile = await file.copy(
+        '${thumbnailsDir.path}/$fileName',
+      );
       print("Image saved to: $savedFile.path");
       return savedFile.path;
     }
@@ -272,25 +283,26 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
 
   Widget _buildProductTile(Product product) {
     return ListTile(
-      leading: (product.imagePath != null && product.imagePath!.isNotEmpty)
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Image.file(
-                File(product.imagePath!),
+      leading:
+          (product.imagePath != null && product.imagePath!.isNotEmpty)
+              ? ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.file(
+                  File(product.imagePath!),
+                  width: 44,
+                  height: 44,
+                  fit: BoxFit.cover,
+                ),
+              )
+              : Container(
                 width: 44,
                 height: 44,
-                fit: BoxFit.cover,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.image, color: Colors.grey, size: 28),
               ),
-            )
-          : Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.image, color: Colors.grey, size: 28),
-            ),
       title: Text(product.name),
       subtitle: Text(
         'Rp ${product.price.toStringAsFixed(0)} • ${product.category} • Mode: ${product.mode}'

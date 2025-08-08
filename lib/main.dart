@@ -18,13 +18,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final appSupportDir = await getApplicationSupportDirectory();
-  // await Hive.initFlutter(appSupportDir.path);
+  await Hive.initFlutter(appSupportDir.path);
 
     // Use your own folder, e.g. "RestaurantPOS"
-  final myAppDir = Directory('${appSupportDir.parent.path}/RestaurantPOS');
-  if (!myAppDir.existsSync()) myAppDir.createSync();
+  // final myAppDir = Directory('${appSupportDir.parent.path}/RestaurantPOS');
+  // if (!myAppDir.existsSync()) myAppDir.createSync();
 
-  await Hive.initFlutter(myAppDir.path);
+  // await Hive.initFlutter(myAppDir.path);
 
   Hive.registerAdapter(OrderAdapter());
   Hive.registerAdapter(OrderItemAdapter()); // Register OrderItem adapter
