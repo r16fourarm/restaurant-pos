@@ -6,6 +6,12 @@ import '../app_mode_provider.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import '../models/cart_model.dart';
+import 'dart:io';
+// ADD:
+import '../services/printer/debug_receipt_printer.dart';
+import '../services/printer/print_receipt.dart';
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import '../services/printer/bt_receipt_printer.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -21,13 +27,130 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // Payment status
   String _paymentStatus = 'paid'; // 'paid' or 'unpaid'
   String _paymentMethod = 'Cash';
-  final TextEditingController _amountReceivedController = TextEditingController();
+  final TextEditingController _amountReceivedController =
+      TextEditingController();
   double _change = 0.0;
 
   // Catering-specific fields
   DateTime? _eventDate;
-  final TextEditingController _customerPhoneController = TextEditingController();
+  final TextEditingController _customerPhoneController =
+      TextEditingController();
   final TextEditingController _notesController = TextEditingController();
+
+  Future<void> _printReceiptPreview({
+    required double total,
+    required double amountReceived,
+    required double change,
+  }) async {
+    // Build items for printing from current cart
+    final cart = context.read<CartModel>();
+    final items =
+        cart.items.map((ci) {
+          return {
+            'name': ci.product.name,
+            'qty': ci.quantity,
+            'total': ci.totalPrice, // includes addons already from your model
+            'addons': ci.addons.map((a) => {'name': a.name}).toList(),
+          };
+        }).toList();
+
+    final mock = DebugReceiptPrinter();
+
+    await printRestaurantReceipt(
+      mock,
+      restaurantName: 'YOUR RESTAURANT', // TODO: set your brand
+      address: null, // optional
+      phone: null, // optional
+      billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
+      table:
+          _tableNumberController.text.isNotEmpty
+              ? _tableNumberController.text
+              : null,
+      cashierOrOrderer:
+          _ordererController.text.isNotEmpty
+              ? _ordererController.text
+              : 'Kasir',
+      items: items,
+      subtotal: total, // if you add tax/service later, change here
+      tax: 0,
+      service: 0,
+      total: total,
+      paid: amountReceived,
+      change: change,
+      time: DateTime.now(),
+    );
+
+    // Show preview dialog so you can verify without a printer
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Receipt Preview'),
+            content: SingleChildScrollView(
+              child: Text(
+                mock.output,
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+Future<void> _printReceiptSmart({
+  required double total,
+  required double amountReceived,
+  required double change,
+}) async {
+  final cart = context.read<CartModel>();
+  final items = cart.items.map((ci) => {
+        'name': ci.product.name,
+        'qty' : ci.quantity,
+        'total': ci.totalPrice,
+        'addons': ci.addons.map((a) => {'name': a.name}).toList(),
+      }).toList();
+
+  if (Platform.isAndroid) {
+    try {
+      final bt = BlueThermalPrinter.instance;
+      final isConnected = (await bt.isConnected) == true;
+
+      if (isConnected) {
+        final real = BtReceiptPrinter(bt);
+        await printRestaurantReceipt(
+          real,
+          restaurantName: 'YOUR RESTAURANT',
+          billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
+          table: _tableNumberController.text.isNotEmpty ? _tableNumberController.text : null,
+          cashierOrOrderer: _ordererController.text.isNotEmpty ? _ordererController.text : 'Kasir',
+          items: items,
+          subtotal: total,
+          total: total,
+          paid: amountReceived,
+          change: change,
+          time: DateTime.now(),
+        );
+        return; // done
+      }
+    } catch (e) {
+      // If plugin not ready / MissingPluginException, fall through to preview
+      // print('Printer error: $e');
+    }
+  }
+
+  // Fallback preview (works on Windows/Mac/Web and when not connected)
+  await _printReceiptPreview(
+    total: total,
+    amountReceived: amountReceived,
+    change: change,
+  );
+}
 
   Future<void> _selectEventDate() async {
     final now = DateTime.now();
@@ -67,16 +190,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    final orderItems = cart.items.map((item) {
-      return OrderItem(
-        name: item.product.name,
-        price: item.product.price,
-        quantity: item.quantity,
-        addons: item.addons.map((a) => a.name).toList(),
-        addonsPrice:
-            item.addons.fold(0.0, (sum, a) => (sum as double) + a.price) ?? 0.0,
-      );
-    }).toList();
+    final orderItems =
+        cart.items.map((item) {
+          return OrderItem(
+            name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity,
+            addons: item.addons.map((a) => a.name).toList(),
+            addonsPrice:
+                item.addons.fold(0.0, (sum, a) => (sum as double) + a.price) ??
+                0.0,
+          );
+        }).toList();
 
     final appMode = context.read<AppModeProvider>().mode;
 
@@ -87,7 +212,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (appMode == 'catering') {
       eventDate = _eventDate;
       customerPhone =
-          _customerPhoneController.text.isNotEmpty ? _customerPhoneController.text : null;
+          _customerPhoneController.text.isNotEmpty
+              ? _customerPhoneController.text
+              : null;
       notes = _notesController.text.isNotEmpty ? _notesController.text : null;
     }
 
@@ -97,9 +224,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       mode: appMode,
       time: DateTime.now(),
       orderer: orderer,
-      tableNumber: _tableNumberController.text.isNotEmpty
-          ? _tableNumberController.text
-          : null,
+      tableNumber:
+          _tableNumberController.text.isNotEmpty
+              ? _tableNumberController.text
+              : null,
       status: _paymentStatus,
       eventDate: eventDate,
       customerPhone: customerPhone,
@@ -113,27 +241,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final box = Hive.box<Order>('orders');
     await box.add(newOrder);
 
+    if (_paymentStatus == 'paid') {
+      await _printReceiptSmart(
+        total: total,
+        amountReceived: amountReceived,
+        change: _change,
+      );
+    } // print receipt
+
     cart.clear();
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(_paymentStatus == 'paid' ? 'Order Finalized' : 'Order Saved'),
-        content: Text(_paymentStatus == 'paid'
-            ? 'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
-              'Total: Rp ${total.toStringAsFixed(0)}\n'
-              'Paid: Rp ${amountReceived.toStringAsFixed(0)}\n'
-              'Change: Rp ${_change.toStringAsFixed(0)}'
-            : 'Order saved as UNPAID.\nCustomer can pay later.'),
-        actions: [
-          TextButton(
-            child: const Text('OK'),
-            onPressed: () {
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
+      builder:
+          (_) => AlertDialog(
+            title: Text(
+              _paymentStatus == 'paid' ? 'Order Finalized' : 'Order Saved',
+            ),
+            content: Text(
+              _paymentStatus == 'paid'
+                  ? 'Thank you${orderer.isNotEmpty ? ', $orderer' : ''}!\n'
+                      'Total: Rp ${total.toStringAsFixed(0)}\n'
+                      'Paid: Rp ${amountReceived.toStringAsFixed(0)}\n'
+                      'Change: Rp ${_change.toStringAsFixed(0)}'
+                  : 'Order saved as UNPAID.\nCustomer can pay later.',
+            ),
+            actions: [
+              TextButton(
+                child: const Text('OK'),
+                onPressed: () {
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                },
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -156,16 +297,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   final item = cart.items[index];
                   return ListTile(
                     title: Text('${item.product.name} x ${item.quantity}'),
-                    subtitle: (item.addons.isNotEmpty)
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: item.addons
-                                .map((addon) => Text(
-                                      '- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
-                                    ))
-                                .toList(),
-                          )
-                        : null,
+                    subtitle:
+                        (item.addons.isNotEmpty)
+                            ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children:
+                                  item.addons
+                                      .map(
+                                        (addon) => Text(
+                                          '- ${addon.name} (Rp ${addon.price.toStringAsFixed(0)})',
+                                        ),
+                                      )
+                                      .toList(),
+                            )
+                            : null,
                     trailing: Text('Rp ${item.totalPrice.toStringAsFixed(0)}'),
                   );
                 },
@@ -198,9 +343,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       suffixIcon: const Icon(Icons.calendar_today),
                     ),
                     controller: TextEditingController(
-                      text: _eventDate != null
-                          ? DateFormat('yyyy-MM-dd').format(_eventDate!)
-                          : '',
+                      text:
+                          _eventDate != null
+                              ? DateFormat('yyyy-MM-dd').format(_eventDate!)
+                              : '',
                     ),
                     readOnly: true,
                   ),
@@ -258,10 +404,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               DropdownButtonFormField<String>(
                 value: _paymentMethod,
                 decoration: const InputDecoration(labelText: "Payment Method"),
-                items: ['Cash', 'QRIS', 'EDC', 'Other']
-                    .map((method) =>
-                        DropdownMenuItem(value: method, child: Text(method)))
-                    .toList(),
+                items:
+                    ['Cash', 'QRIS', 'EDC', 'Other']
+                        .map(
+                          (method) => DropdownMenuItem(
+                            value: method,
+                            child: Text(method),
+                          ),
+                        )
+                        .toList(),
                 onChanged: (v) {
                   setState(() {
                     _paymentMethod = v ?? 'Cash';
@@ -278,7 +429,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text('Change:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Change:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     _change >= 0 ? 'Rp ${_change.toStringAsFixed(0)}' : '-',
@@ -299,9 +453,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _confirmOrder,
-              child: Text(_paymentStatus == 'paid'
-                  ? 'Confirm & Finalize'
-                  : 'Save as Unpaid'),
+              child: Text(
+                _paymentStatus == 'paid'
+                    ? 'Confirm & Finalize'
+                    : 'Save as Unpaid',
+              ),
             ),
           ],
         ),

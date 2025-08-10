@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/cart_model.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
+import '../widgets/app_drawer.dart';
 import 'cart_screen.dart';
 import '../app_mode_provider.dart';
 import 'dart:io';
@@ -359,6 +360,7 @@ class _OrderScreenState extends State<OrderScreen> {
           ),
         ],
       ),
+      drawer: const AppDrawer(),
       body: ValueListenableBuilder(
         valueListenable: Hive.box<Product>('products').listenable(),
         builder: (context, Box<Product> box, _) {
