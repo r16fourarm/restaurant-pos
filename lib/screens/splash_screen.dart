@@ -30,6 +30,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     // Navigate to the Order screen after 2 seconds
     Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/order');
     });
   }
@@ -50,7 +51,7 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset("assets/logo.png", height: 120),
+              Image.asset("assets/logo_sekata.png", height: 120),
               const SizedBox(height: 20),
               const Text(
                 "My POS App",

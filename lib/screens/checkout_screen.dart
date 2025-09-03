@@ -1,17 +1,18 @@
+// lib/screens/checkout_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
+
 import '../app_mode_provider.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import '../models/cart_model.dart';
-import 'dart:io';
-// ADD:
-import '../services/printer/debug_receipt_printer.dart';
-import '../services/printer/print_receipt.dart';
-import 'package:blue_thermal_printer/blue_thermal_printer.dart';
-import '../services/printer/bt_receipt_printer.dart';
+import '../services/settings/brand_prefs.dart';
+import '../services/settings/print_date_prefs.dart';
+
+// Printer facade (the only printing import you need here)
+import '../services/printer/printer_facade.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -37,120 +38,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  Future<void> _printReceiptPreview({
-    required double total,
-    required double amountReceived,
-    required double change,
-  }) async {
-    // Build items for printing from current cart
-    final cart = context.read<CartModel>();
-    final items =
-        cart.items.map((ci) {
-          return {
-            'name': ci.product.name,
-            'qty': ci.quantity,
-            'total': ci.totalPrice, // includes addons already from your model
-            'addons': ci.addons.map((a) => {'name': a.name}).toList(),
-          };
-        }).toList();
-
-    final mock = DebugReceiptPrinter();
-
-    await printRestaurantReceipt(
-      mock,
-      restaurantName: 'YOUR RESTAURANT', // TODO: set your brand
-      address: null, // optional
-      phone: null, // optional
-      billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
-      table:
-          _tableNumberController.text.isNotEmpty
-              ? _tableNumberController.text
-              : null,
-      cashierOrOrderer:
-          _ordererController.text.isNotEmpty
-              ? _ordererController.text
-              : 'Kasir',
-      items: items,
-      subtotal: total, // if you add tax/service later, change here
-      tax: 0,
-      service: 0,
-      total: total,
-      paid: amountReceived,
-      change: change,
-      time: DateTime.now(),
-    );
-
-    // Show preview dialog so you can verify without a printer
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Receipt Preview'),
-            content: SingleChildScrollView(
-              child: Text(
-                mock.output,
-                style: const TextStyle(fontFamily: 'monospace'),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-    );
+  void _updateChange(double total) {
+    final amount = double.tryParse(_amountReceivedController.text) ?? 0.0;
+    setState(() => _change = amount - total);
   }
-
-Future<void> _printReceiptSmart({
-  required double total,
-  required double amountReceived,
-  required double change,
-}) async {
-  final cart = context.read<CartModel>();
-  final items = cart.items.map((ci) => {
-        'name': ci.product.name,
-        'qty' : ci.quantity,
-        'total': ci.totalPrice,
-        'addons': ci.addons.map((a) => {'name': a.name}).toList(),
-      }).toList();
-
-  if (Platform.isAndroid) {
-    try {
-      final bt = BlueThermalPrinter.instance;
-      final isConnected = (await bt.isConnected) == true;
-
-      if (isConnected) {
-        final real = BtReceiptPrinter(bt);
-        await printRestaurantReceipt(
-          real,
-          restaurantName: 'YOUR RESTAURANT',
-          billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
-          table: _tableNumberController.text.isNotEmpty ? _tableNumberController.text : null,
-          cashierOrOrderer: _ordererController.text.isNotEmpty ? _ordererController.text : 'Kasir',
-          items: items,
-          subtotal: total,
-          total: total,
-          paid: amountReceived,
-          change: change,
-          time: DateTime.now(),
-        );
-        return; // done
-      }
-    } catch (e) {
-      // If plugin not ready / MissingPluginException, fall through to preview
-      // print('Printer error: $e');
-    }
-  }
-
-  // Fallback preview (works on Windows/Mac/Web and when not connected)
-  await _printReceiptPreview(
-    total: total,
-    amountReceived: amountReceived,
-    change: change,
-  );
-}
 
   Future<void> _selectEventDate() async {
     final now = DateTime.now();
@@ -160,14 +51,7 @@ Future<void> _printReceiptSmart({
       firstDate: now,
       lastDate: now.add(const Duration(days: 366)),
     );
-    if (picked != null) {
-      setState(() => _eventDate = picked);
-    }
-  }
-
-  void _updateChange(double total) {
-    final amount = double.tryParse(_amountReceivedController.text) ?? 0.0;
-    setState(() => _change = amount - total);
+    if (picked != null) setState(() => _eventDate = picked);
   }
 
   Future<void> _confirmOrder() async {
@@ -175,7 +59,7 @@ Future<void> _printReceiptSmart({
     final orderer = _ordererController.text;
     final total = cart.total;
 
-    // If Pay Now, validate payment
+    // Validate when Pay Now
     double amountReceived = 0.0;
     if (_paymentStatus == 'paid') {
       amountReceived = double.tryParse(_amountReceivedController.text) ?? 0.0;
@@ -190,6 +74,7 @@ Future<void> _printReceiptSmart({
       }
     }
 
+    // Build OrderItems from cart
     final orderItems =
         cart.items.map((item) {
           return OrderItem(
@@ -197,15 +82,16 @@ Future<void> _printReceiptSmart({
             price: item.product.price,
             quantity: item.quantity,
             addons: item.addons.map((a) => a.name).toList(),
-            addonsPrice:
-                item.addons.fold(0.0, (sum, a) => (sum as double) + a.price) ??
-                0.0,
+            addonsPrice: item.addons.fold<double>(
+              0.0,
+              (sum, a) => sum + a.price,
+            ),
           );
         }).toList();
 
     final appMode = context.read<AppModeProvider>().mode;
 
-    // Catering fields (only for catering)
+    // Catering fields
     DateTime? eventDate;
     String? customerPhone;
     String? notes;
@@ -218,11 +104,45 @@ Future<void> _printReceiptSmart({
       notes = _notesController.text.isNotEmpty ? _notesController.text : null;
     }
 
+    // Prepare receipt data BEFORE we clear the cart
+    ReceiptData? receiptData;
+
+    DateTime? override;
+    final enabled = await PrintDatePrefs.isEnabled();
+    if (enabled) {
+      override = await PrintDatePrefs.getOverride();
+      // Optional safety: ignore in release builds
+      // if (kReleaseMode) override = null;
+    }
+    if (_paymentStatus == 'paid') {
+      receiptData = PrinterFacade.fromCart(
+        cart,
+        // billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
+        billNumber:
+            DateTime(
+              2025,
+              08,
+              27,
+              19,
+              30,
+            ).millisecondsSinceEpoch.toString(), // for testing
+        table: _tableNumberController.text,
+        cashierOrOrderer: orderer,
+        paid: amountReceived,
+        change: _change,
+        time: override
+        // tax: 0, service: 0, // add later if you implement them
+      );
+    }
+
+    // Save order to Hive
     final newOrder = Order(
       items: orderItems,
       total: total,
       mode: appMode,
-      time: DateTime.now(),
+      // time: DateTime.now(),
+      time: override ?? DateTime.now(),
+
       orderer: orderer,
       tableNumber:
           _tableNumberController.text.isNotEmpty
@@ -232,7 +152,9 @@ Future<void> _printReceiptSmart({
       eventDate: eventDate,
       customerPhone: customerPhone,
       notes: notes,
-      paymentTime: DateTime.now(),
+      // paymentTime: DateTime.now(),
+      paymentTime: override ?? DateTime.now(),
+
       paymentMethod: _paymentStatus == 'paid' ? _paymentMethod : null,
       amountReceived: _paymentStatus == 'paid' ? amountReceived : 0.0,
       change: _paymentStatus == 'paid' ? _change : 0.0,
@@ -241,16 +163,36 @@ Future<void> _printReceiptSmart({
     final box = Hive.box<Order>('orders');
     await box.add(newOrder);
 
-    if (_paymentStatus == 'paid') {
-      await _printReceiptSmart(
-        total: total,
-        amountReceived: amountReceived,
-        change: _change,
-      );
-    } // print receipt
+    final b = await BrandPrefs.getBrand();
+    final brand = PrinterBrand(
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      logoFilePath:
+          (b.logoFile != null && b.logoFile!.isNotEmpty) ? b.logoFile : null,
+      logoAssetPath:
+          (b.logoFile == null || b.logoFile!.isEmpty) ? b.logoAsset : null,
+    );
 
+    // debugPrint('LOGO LOADED: ${logo != null}, bytes=${logo?.length}');
+    debugPrint('brand.logoFilePath=${brand.logoFilePath}');
+    debugPrint('brand.logoAssetPath=${brand.logoAssetPath}');
+
+    // Print (real on Android if connected, preview elsewhere)
+    if (receiptData != null) {
+      await PrinterFacade.print(
+        data: receiptData,
+        brand: const PrinterBrand(
+          name: 'SEKATA',
+        ), // todo: set your brand/address/phone
+        context: context, // so preview shows when no printer / desktop
+      );
+    }
+
+    // Clear cart and show result
     cart.clear();
 
+    if (!mounted) return;
     showDialog(
       context: context,
       builder:
@@ -338,9 +280,9 @@ Future<void> _printReceiptSmart({
                 onTap: _selectEventDate,
                 child: AbsorbPointer(
                   child: TextField(
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Event Date (optional)',
-                      suffixIcon: const Icon(Icons.calendar_today),
+                      suffixIcon: Icon(Icons.calendar_today),
                     ),
                     controller: TextEditingController(
                       text:
@@ -380,9 +322,7 @@ Future<void> _printReceiptSmart({
                   child: RadioListTile<String>(
                     value: 'paid',
                     groupValue: _paymentStatus,
-                    onChanged: (val) {
-                      setState(() => _paymentStatus = val!);
-                    },
+                    onChanged: (val) => setState(() => _paymentStatus = val!),
                     title: const Text('Pay Now'),
                   ),
                 ),
@@ -390,9 +330,7 @@ Future<void> _printReceiptSmart({
                   child: RadioListTile<String>(
                     value: 'unpaid',
                     groupValue: _paymentStatus,
-                    onChanged: (val) {
-                      setState(() => _paymentStatus = val!);
-                    },
+                    onChanged: (val) => setState(() => _paymentStatus = val!),
                     title: const Text('Pay Later'),
                   ),
                 ),
@@ -413,11 +351,7 @@ Future<void> _printReceiptSmart({
                           ),
                         )
                         .toList(),
-                onChanged: (v) {
-                  setState(() {
-                    _paymentMethod = v ?? 'Cash';
-                  });
-                },
+                onChanged: (v) => setState(() => _paymentMethod = v ?? 'Cash'),
               ),
               const SizedBox(height: 8),
               TextField(

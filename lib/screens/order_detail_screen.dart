@@ -1,142 +1,55 @@
+// lib/screens/order_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../models/cart_model.dart';
+import '../services/settings/brand_prefs.dart';
 
-import 'dart:io' show Platform;
-import 'package:blue_thermal_printer/blue_thermal_printer.dart';
-
-import '../services/printer/bt_receipt_printer.dart';
-import '../services/printer/debug_receipt_printer.dart';
-import '../services/printer/print_receipt.dart';
+// 🔽 single printing entrypoint
+import '../services/printer/printer_facade.dart';
 
 class OrderDetailScreen extends StatelessWidget {
   final Order order;
 
   const OrderDetailScreen({super.key, required this.order});
 
-  Future<double?> _askAmountPaid(
-    BuildContext context,
-    double defaultAmount,
-  ) async {
-    final ctrl = TextEditingController(text: defaultAmount.toStringAsFixed(0));
-    double? paid;
-    await showDialog(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Amount Received'),
-            content: TextField(
-              controller: ctrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Rp'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  paid = double.tryParse(ctrl.text);
-                  Navigator.pop(context);
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
-    return paid;
-  }
-
-  List<Map<String, dynamic>> _printableItemsFromOrder(Order o) {
-    return o.items
-        .map(
-          (it) => {
-            'name': it.name,
-            'qty': it.quantity,
-            'total': it.total, // your OrderItem already exposes .total
-            'addons':
-                it.addons
-                    .map((n) => {'name': n})
-                    .toList(), // List<String> -> List<Map>
-          },
-        )
-        .toList();
-  }
-
-  Future<void> _printFinalReceipt(
-    BuildContext context,
-    Order o,
-    double paid,
-  ) async {
-    final change = paid - o.total;
-    final items = _printableItemsFromOrder(o);
-
-    // Android real print if connected, otherwise preview
-    final isAndroid = Platform.isAndroid;
-    final connected =
-        isAndroid
-            ? ((await BlueThermalPrinter.instance.isConnected) == true)
-            : false;
-
-    if (connected) {
-      final real = BtReceiptPrinter(BlueThermalPrinter.instance);
-      await printRestaurantReceipt(
-        real,
-        restaurantName: 'YOUR RESTAURANT',
-        billNumber: (o.key ?? o.time.millisecondsSinceEpoch).toString(),
-        table: o.tableNumber,
-        cashierOrOrderer: (o.orderer.isNotEmpty ? o.orderer : 'Kasir'),
-        items: items,
-        subtotal: o.total, // adjust if you add tax/service separately
-        total: o.total,
-        paid: paid,
-        change: change,
-        time: DateTime.now(),
-      );
-    } else {
-      final mock = DebugReceiptPrinter();
-      await printRestaurantReceipt(
-        mock,
-        restaurantName: 'YOUR RESTAURANT',
-        billNumber: (o.key ?? o.time.millisecondsSinceEpoch).toString(),
-        table: o.tableNumber,
-        cashierOrOrderer: (o.orderer.isNotEmpty ? o.orderer : 'Kasir'),
-        items: items,
-        subtotal: o.total,
-        total: o.total,
-        paid: paid,
-        change: change,
-        time: DateTime.now(),
-      );
-      // Show preview dialog on non-Android / not connected
-      // (Safe even in StatelessWidget)
-      // ignore: use_build_context_synchronously
-      await showDialog(
-        context: context,
-        builder:
-            (_) => AlertDialog(
-              title: const Text('Receipt Preview'),
-              content: SingleChildScrollView(
-                child: Text(
-                  mock.output,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ],
-            ),
-      );
-    }
-  }
+  // Future<double?> _askAmountPaid(
+  //   BuildContext context,
+  //   double defaultAmount,
+  // ) async {
+  //   final ctrl = TextEditingController(text: defaultAmount.toStringAsFixed(0));
+  //   double? paid;
+  //   await showDialog(
+  //     context: context,
+  //     builder:
+  //         (_) => AlertDialog(
+  //           title: const Text('Amount Received'),
+  //           content: TextField(
+  //             controller: ctrl,
+  //             keyboardType: TextInputType.number,
+  //             decoration: const InputDecoration(labelText: 'Rp'),
+  //           ),
+  //           actions: [
+  //             TextButton(
+  //               onPressed: () => Navigator.pop(context),
+  //               child: const Text('Cancel'),
+  //             ),
+  //             ElevatedButton(
+  //               onPressed: () {
+  //                 paid = double.tryParse(ctrl.text);
+  //                 Navigator.pop(context);
+  //               },
+  //               child: const Text('OK'),
+  //             ),
+  //           ],
+  //         ),
+  //   );
+  //   return paid;
+  // } // currently unused
 
   void _reorder(BuildContext context) {
     final cart = context.read<CartModel>();
@@ -156,6 +69,7 @@ class OrderDetailScreen extends StatelessWidget {
               isAddon: true,
             );
           }).toList();
+
       cart.addItem(
         CartItem(
           product: mainProduct,
@@ -174,7 +88,7 @@ class OrderDetailScreen extends StatelessWidget {
     final methods = ['Cash', 'QRIS', 'Debit', 'Other'];
     String selected = methods[0];
 
-    // Ask payment method + amount in one flow
+    // Ask payment method + amount in one dialog
     final amount = await showDialog<double?>(
       context: context,
       builder: (ctx) {
@@ -245,11 +159,44 @@ class OrderDetailScreen extends StatelessWidget {
     order.change = amount - order.total;
     await order.save();
 
-    // Print final receipt (real on Android, preview elsewhere)
-    await _printFinalReceipt(context, order, amount);
+    // Build receipt data from the order and print (real on Android, preview elsewhere)
+    final data = PrinterFacade.fromOrder(
+      order,
+      // mode defaults to ReceiptMode.finalPaid
+      paidOverride: amount,
+      timeOverride: DateTime.now(),
+    );
+    final b = await BrandPrefs.getBrand();
+    final brand = PrinterBrand(
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      logoAssetPath: b.logoFile == null ? b.logoAsset : null,
+      logoFilePath: b.logoFile,
+    );
+    await PrinterFacade.print(
+      data: data,
+      brand: const PrinterBrand(
+        name: 'Sekata',
+      ), // TODO: put your brand/address/phone if desired
+      context: context, // show preview when no printer / desktop
+    );
 
-    // Return to previous screen with result
     if (context.mounted) Navigator.pop(context, 'updated');
+  }
+
+  Future<void> _reprint(BuildContext context) async {
+    final data = PrinterFacade.fromOrder(
+      order,
+      paidOverride: order.amountReceived ?? order.total,
+      timeOverride: DateTime.now(),
+    );
+
+    await PrinterFacade.print(
+      data: data,
+      brand: const PrinterBrand(name: 'YOUR RESTAURANT'),
+      context: context,
+    );
   }
 
   @override
@@ -429,12 +376,7 @@ class OrderDetailScreen extends StatelessWidget {
                 ),
                 if (isPaid)
                   ElevatedButton.icon(
-                    onPressed:
-                        () => _printFinalReceipt(
-                          context,
-                          order,
-                          order.amountReceived ?? order.total,
-                        ),
+                    onPressed: () => _reprint(context),
                     icon: const Icon(Icons.print),
                     label: const Text('Re-Print'),
                   ),

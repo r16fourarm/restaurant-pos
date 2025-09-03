@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
+// import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -243,13 +243,11 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
         await thumbnailsDir.create(recursive: true);
       }
       final fileName =
-          DateTime.now().millisecondsSinceEpoch.toString() +
-          '_' +
-          file.uri.pathSegments.last;
+          '${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
       final savedFile = await file.copy(
         '${thumbnailsDir.path}/$fileName',
       );
-      print("Image saved to: $savedFile.path");
+      // print("Image saved to: $savedFile.path");
       return savedFile.path;
     }
     return null;

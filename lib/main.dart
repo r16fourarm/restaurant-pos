@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'app_mode_provider.dart';
 import 'models/product.dart';
 import 'models/order.dart';
@@ -13,9 +12,12 @@ import 'screens/bills_screen.dart';
 import 'screens/daily_recap_screen.dart';
 import 'screens/product_management_screen.dart';
 import 'screens/splash_screen.dart';
+import 'services/settings/brand_prefs.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await BrandPrefs.ensureDefaults();
 
   final appSupportDir = await getApplicationSupportDirectory();
   await Hive.initFlutter(appSupportDir.path);
@@ -68,6 +70,7 @@ class RestaurantPOSApp extends StatelessWidget {
         '/bills': (context) => const BillsScreen(),
         '/recap': (context) => const DailyRecapScreen(),
         '/products': (context) => const ProductManagementScreen(),
+        '/settings': (context) => const SettingsScreen(),
       },
     );
   }

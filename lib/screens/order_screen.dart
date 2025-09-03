@@ -1,16 +1,15 @@
 // lib/screens/order_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+
 import '../models/cart_model.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../widgets/app_drawer.dart';
 import 'cart_screen.dart';
 import '../app_mode_provider.dart';
-import 'dart:io';
-
-// ...[imports remain unchanged]...
 
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});
@@ -24,47 +23,11 @@ class _OrderScreenState extends State<OrderScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
-  // // Add-to-cart dialog
-  // Future<void> _showAddToCartDialog(
-  //   BuildContext context,
-  //   Product product,
-  // ) async {
-  //   await showDialog(
-  //     context: context,
-  //     builder:
-  //         (context) => AlertDialog(
-  //           shape: RoundedRectangleBorder(
-  //             borderRadius: BorderRadius.circular(16),
-  //           ),
-  //           title: Row(
-  //             children: [
-  //               Icon(Icons.check_circle, color: Colors.green, size: 28),
-  //               SizedBox(width: 10),
-  //               Text('Added to Cart'),
-  //             ],
-  //           ),
-  //           content: Text(
-  //             'Product "${product.name}" has been added to the cart.',
-  //           ),
-  //           actions: [
-  //             TextButton(
-  //               onPressed: () => Navigator.pop(context),
-  //               child: Text('Continue Shopping'),
-  //             ),
-  //             ElevatedButton(
-  //               onPressed: () {
-  //                 Navigator.pop(context);
-  //                 _goToCart(context);
-  //               },
-  //               child: Text('Go to Cart'),
-  //             ),
-  //           ],
-  //         ),
-  //   );
-  // }
-
   void _addToCart(BuildContext context, Product product) async {
     if (product.isAddon) return;
+
+    // final cart = context.read<CartModel>();
+    // final messenger = ScaffoldMessenger.of(context);
 
     final appMode = Provider.of<AppModeProvider>(context, listen: false).mode;
     final allProducts = Hive.box<Product>('products').values.toList();
@@ -147,6 +110,8 @@ class _OrderScreenState extends State<OrderScreen> {
         },
       );
 
+      if (!context.mounted) return; // or: if (!mounted) return; inside a State
+
       if (result != null) {
         selectedAddons = result;
       } else {
@@ -164,17 +129,17 @@ class _OrderScreenState extends State<OrderScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
-          children: [
+          children: const [
             Icon(Icons.check_circle, color: Colors.green, size: 20),
             SizedBox(width: 8),
-            Expanded(child: Text('"${product.name}" added to cart!')),
+            Expanded(child: Text('Added to cart!')),
           ],
         ),
         backgroundColor: Colors.grey[900],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: Duration(seconds: 2),
-        margin: EdgeInsets.only(bottom: 80, left: 16, right: 16),
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
       ),
     );
   }
@@ -201,30 +166,26 @@ class _OrderScreenState extends State<OrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const AppDrawer(),
+      // Make the drawer edge-swipe area small to avoid stealing touches
+      drawerEdgeDragWidth: 24,
+
       appBar: AppBar(
+        // Prevent auto-hamburger that can overlap gestures
+        automaticallyImplyLeading: false,
+        leadingWidth: 56,
+        leading: Builder(
+          builder:
+              (ctx) => IconButton(
+                icon: const Icon(Icons.menu),
+                tooltip: MaterialLocalizations.of(ctx).openAppDrawerTooltip,
+                onPressed: () => Scaffold.of(ctx).openDrawer(),
+              ),
+        ),
+        titleSpacing: 0,
         title: const Text('Order Menu'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Settings',
-            onPressed: () => {Navigator.pushNamed(context, '/settings')},
-          ),
-          IconButton(
-            icon: const Icon(Icons.food_bank),
-            tooltip: 'Products',
-            onPressed: () => _goToProducts(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.note),
-            tooltip: 'Bills',
-            onPressed: () => _goToBills(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.note_alt),
-            tooltip: 'Recap',
-            onPressed: () => _goToRecap(context),
-          ),
-          // ---- Cart Icon with Red Badge ----
+          // Keep only the cart here (with badge)
           Consumer<CartModel>(
             builder: (context, cart, child) {
               int cartCount = cart.items.fold(0, (p, e) => p + e.quantity);
@@ -234,7 +195,6 @@ class _OrderScreenState extends State<OrderScreen> {
                   IconButton(
                     icon: const Icon(Icons.shopping_cart),
                     tooltip: 'Cart',
-                    // color: cartCount > 0 ? Colors.red : Colors.white,
                     onPressed: () => _goToCart(context),
                   ),
                   if (cartCount > 0)
@@ -269,47 +229,208 @@ class _OrderScreenState extends State<OrderScreen> {
               );
             },
           ),
-          // ---- Mode Icon with Hover Color ----
-          // Consumer<AppModeProvider>(
-          //   builder: (context, modeProvider, child) {
-          //     return _HoverableModeIcon(
-          //       isRestaurant: modeProvider.mode == 'restaurant',
-          //       onPressed: () {
-          //         // Optional: could open mode switcher dialog
-          //       },
-          //     );
-          //   },
-          // ),
-          // ---- Mode Switcher Dropdown ----
-          Consumer2<AppModeProvider, CartModel>(
-            builder: (context, modeProvider, cart, child) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Container(
+        ],
+      ),
+
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+
+          // Our own top toolbar row to avoid AppBar crowding/overlap
+          _TopActionsBar(
+            onSettings: () => Navigator.pushNamed(context, '/settings'),
+            onProducts: () => _goToProducts(context),
+            onBills: () => _goToBills(context),
+            onRecap: () => _goToRecap(context),
+          ),
+
+          Expanded(
+            child: ValueListenableBuilder(
+              valueListenable: Hive.box<Product>('products').listenable(),
+              builder: (context, Box<Product> box, _) {
+                final appMode = Provider.of<AppModeProvider>(context).mode;
+
+                final allProducts =
+                    box.values
+                        .where(
+                          (p) =>
+                              (p.mode == appMode || p.mode == 'both') &&
+                              !p.isAddon,
+                        )
+                        .toList();
+
+                final filtered =
+                    allProducts.where((p) {
+                      final matchesCategory =
+                          _selectedCategory == 'All' ||
+                          p.category == _selectedCategory;
+                      final matchesSearch = p.name.toLowerCase().contains(
+                        _searchQuery.toLowerCase(),
+                      );
+                      return matchesCategory && matchesSearch;
+                    }).toList();
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search...',
+                                prefixIcon: const Icon(Icons.search),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  _searchQuery = value;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          DropdownButton<String>(
+                            value: _selectedCategory,
+                            borderRadius: BorderRadius.circular(12),
+                            items:
+                                ['All', 'Food', 'Drink', 'Other']
+                                    .map(
+                                      (cat) => DropdownMenuItem(
+                                        value: cat,
+                                        child: Text(cat),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCategory = value!;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child:
+                          filtered.isEmpty
+                              ? const Center(
+                                child: Text('No matching products found.'),
+                              )
+                              : GridView.builder(
+                                padding: const EdgeInsets.all(12),
+                                gridDelegate:
+                                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                                      maxCrossAxisExtent: 200,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.9,
+                                    ),
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final product = filtered[index];
+                                  return _ProductCard(
+                                    product: product,
+                                    onTap: () => _addToCart(context, product),
+                                  );
+                                },
+                              ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top toolbar row (buttons + mode switcher) to avoid AppBar crowding.
+class _TopActionsBar extends StatelessWidget {
+  final VoidCallback onSettings, onProducts, onBills, onRecap;
+  const _TopActionsBar({
+    required this.onSettings,
+    required this.onProducts,
+    required this.onBills,
+    required this.onRecap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+      child: Row(
+        children: [
+          // Scrollable action icons (no crowding on small screens)
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    tooltip: 'Settings',
+                    onPressed: onSettings,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.food_bank),
+                    tooltip: 'Products',
+                    onPressed: onProducts,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.note),
+                    tooltip: 'Bills',
+                    onPressed: onBills,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.note_alt),
+                    tooltip: 'Recap',
+                    onPressed: onRecap,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Fixed-width mode switcher at far right
+          SizedBox(
+            width: 100,
+            height: kToolbarHeight - 10,
+            child: Consumer2<AppModeProvider, CartModel>(
+              builder: (context, modeProvider, cart, _) {
+                return DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.blue[700], // <-- Your custom background color
+                    color: Colors.blue[700],
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.08),
                         blurRadius: 4,
-                        offset: Offset(0, 2),
+                        offset: const Offset(0, 2),
                       ),
                     ],
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 2,
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: modeProvider.mode,
-                      style: const TextStyle(
-                        color: Colors.white, // <-- Button text color
-                        fontWeight: FontWeight.bold,
-                      ),
+                      isExpanded: true,
                       dropdownColor: Colors.blue[800],
                       borderRadius: BorderRadius.circular(12),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                       items: const [
                         DropdownMenuItem(
                           value: 'restaurant',
@@ -354,116 +475,17 @@ class _OrderScreenState extends State<OrderScreen> {
                       icon: const Icon(Icons.swap_horiz, color: Colors.white),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
-      ),
-      drawer: const AppDrawer(),
-      body: ValueListenableBuilder(
-        valueListenable: Hive.box<Product>('products').listenable(),
-        builder: (context, Box<Product> box, _) {
-          final appMode = Provider.of<AppModeProvider>(context).mode;
-
-          final allProducts =
-              box.values.where((p) {
-                return (p.mode == appMode || p.mode == 'both') && !p.isAddon;
-              }).toList();
-
-          final filtered =
-              allProducts.where((p) {
-                final matchesCategory =
-                    _selectedCategory == 'All' ||
-                    p.category == _selectedCategory;
-                final matchesSearch = p.name.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                );
-                return matchesCategory && matchesSearch;
-              }).toList();
-
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search...',
-                          prefixIcon: const Icon(Icons.search),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    DropdownButton<String>(
-                      value: _selectedCategory,
-                      borderRadius: BorderRadius.circular(12),
-                      items:
-                          ['All', 'Food', 'Drink', 'Other']
-                              .map(
-                                (cat) => DropdownMenuItem(
-                                  value: cat,
-                                  child: Text(cat),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedCategory = value!;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child:
-                    filtered.isEmpty
-                        ? const Center(
-                          child: Text('No matching products found.'),
-                        )
-                        : GridView.builder(
-                          padding: const EdgeInsets.all(12),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 200,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 0.9,
-                              ),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final product = filtered[index];
-                            return _ProductCard(
-                              product: product,
-                              onTap: () => _addToCart(context, product),
-                            );
-                          },
-                        ),
-              ),
-            ],
-          );
-        },
       ),
     );
   }
 }
 
-// ---- Mode Icon with Hover Color Widget ----
+// ---- Optional: Unused HoverableModeIcon (kept from your file) ----
 class _HoverableModeIcon extends StatefulWidget {
   final bool isRestaurant;
   final VoidCallback onPressed;
@@ -482,7 +504,7 @@ class _HoverableModeIconState extends State<_HoverableModeIcon> {
   @override
   Widget build(BuildContext context) {
     final Color normalColor = Colors.white;
-    final Color hoverColor = Colors.amber; // Customize as needed!
+    final Color hoverColor = Colors.amber;
 
     return MouseRegion(
       onEnter: (_) => setState(() => isHovered = true),
@@ -500,7 +522,7 @@ class _HoverableModeIconState extends State<_HoverableModeIcon> {
   }
 }
 
-// ---- Product Card with Border on Hover ----
+// ---- Product Card with Border on Hover (unchanged) ----
 class _ProductCard extends StatefulWidget {
   final Product product;
   final VoidCallback onTap;
@@ -516,7 +538,9 @@ class _ProductCardState extends State<_ProductCard> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = widget.product.imagePath != null && widget.product.imagePath!.isNotEmpty;
+    final hasPhoto =
+        widget.product.imagePath != null &&
+        widget.product.imagePath!.isNotEmpty;
 
     return MouseRegion(
       onEnter: (_) => setState(() => isHovered = true),
@@ -533,15 +557,16 @@ class _ProductCardState extends State<_ProductCard> {
               color: isHovered ? Colors.blueAccent : Colors.grey.shade300,
               width: 2,
             ),
-            boxShadow: isHovered
-                ? [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ]
-                : [],
+            boxShadow:
+                isHovered
+                    ? [
+                      const BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ]
+                    : [],
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -551,24 +576,28 @@ class _ProductCardState extends State<_ProductCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Image now expands but never overflows
                   Expanded(
-                    child: hasPhoto
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              File(widget.product.imagePath!),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                            ),
-                          )
-                        : Container(
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
+                    child:
+                        hasPhoto
+                            ? ClipRRect(
                               borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(widget.product.imagePath!),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              ),
+                            )
+                            : Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.image,
+                                color: Colors.grey[500],
+                                size: 36,
+                              ),
                             ),
-                            child: Icon(Icons.image, color: Colors.grey[500], size: 36),
-                          ),
                   ),
                   const SizedBox(height: 4),
                   Text(
