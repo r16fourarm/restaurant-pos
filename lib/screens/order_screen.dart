@@ -415,7 +415,7 @@ class _TopActionsBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: const Color.fromRGBO(0, 0, 0, 0.08),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
