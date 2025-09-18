@@ -47,8 +47,10 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
   List<Order> _getFilteredOrders() {
     final allOrders = Hive.box<Order>('orders').values.toList();
     return allOrders.where((order) {
-      final matchStatus = _statusFilter == 'all' || order.status == _statusFilter;
-      final matchDate = _selectedDate == null ||
+      final matchStatus =
+          _statusFilter == 'all' || order.status == _statusFilter;
+      final matchDate =
+          _selectedDate == null ||
           DateFormat('yyyy-MM-dd').format(order.time) ==
               DateFormat('yyyy-MM-dd').format(_selectedDate!);
       final matchMode =
@@ -91,6 +93,7 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
         );
       },
     );
+    if (!context.mounted) return;
     if (selectedFormat != null) {
       await _exportCSV(context, selectedFormat);
     }
@@ -103,8 +106,10 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         final outputPath = await FilePicker.platform.getDirectoryPath();
         if (outputPath == null) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Export cancelled.')));
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Export cancelled.')));
           return;
         }
         file = await exportRecapToCSV(
@@ -114,6 +119,7 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
         );
         final result = await OpenFile.open(file.path);
         if (result.type != ResultType.done) {
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('File saved to: ${file.path}')),
           );
@@ -123,8 +129,10 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
         await Share.shareXFiles([XFile(file.path)], text: '📊 Daily Recap CSV');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('❌ Failed to export: $e')));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('❌ Failed to export: $e')));
     }
   }
 
@@ -145,7 +153,10 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
               value: _modeFilter,
               items: const [
                 DropdownMenuItem(value: 'all', child: Text('All Modes')),
-                DropdownMenuItem(value: 'restaurant', child: Text('Restaurant')),
+                DropdownMenuItem(
+                  value: 'restaurant',
+                  child: Text('Restaurant'),
+                ),
                 DropdownMenuItem(value: 'catering', child: Text('Catering')),
                 DropdownMenuItem(value: 'both', child: Text('Both')),
               ],
@@ -160,11 +171,12 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
             tooltip: 'Filter by Status',
             icon: const Icon(Icons.filter_list),
             onSelected: (value) => setState(() => _statusFilter = value),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'all', child: Text('Show All')),
-              PopupMenuItem(value: 'paid', child: Text('Paid Only')),
-              PopupMenuItem(value: 'unpaid', child: Text('Unpaid Only')),
-            ],
+            itemBuilder:
+                (_) => const [
+                  PopupMenuItem(value: 'all', child: Text('Show All')),
+                  PopupMenuItem(value: 'paid', child: Text('Paid Only')),
+                  PopupMenuItem(value: 'unpaid', child: Text('Unpaid Only')),
+                ],
           ),
           IconButton(
             tooltip: 'Filter by Date',
@@ -179,61 +191,76 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
             ),
         ],
       ),
-      body: recapMap.isEmpty
-          ? const Center(child: Text('No sales data available.'))
-          : ListView.builder(
-              itemCount: sortedDates.length,
-              itemBuilder: (_, index) {
-                final date = sortedDates[index];
-                final dayOrders = recapMap[date]!;
-                final total = dayOrders.fold(0.0, (sum, o) => sum + o.total);
-                final paid = dayOrders
-                    .where((o) => o.status == 'paid')
-                    .fold(0.0, (sum, o) => sum + o.total);
-                final unpaid = total - paid;
+      body:
+          recapMap.isEmpty
+              ? const Center(child: Text('No sales data available.'))
+              : ListView.builder(
+                itemCount: sortedDates.length,
+                itemBuilder: (_, index) {
+                  final date = sortedDates[index];
+                  final dayOrders = recapMap[date]!;
+                  final total = dayOrders.fold(0.0, (sum, o) => sum + o.total);
+                  final paid = dayOrders
+                      .where((o) => o.status == 'paid')
+                      .fold(0.0, (sum, o) => sum + o.total);
+                  final unpaid = total - paid;
 
-                // If there's at least one catering order on that day, show extra info.
-                final isCateringDay = dayOrders.any((o) => o.mode == 'catering');
+                  // If there's at least one catering order on that day, show extra info.
+                  final isCateringDay = dayOrders.any(
+                    (o) => o.mode == 'catering',
+                  );
 
-                String cateringInfo = '';
-                if (isCateringDay) {
-                  final cateringOrders = dayOrders.where((o) => o.mode == 'catering').toList();
-                  final eventDates = cateringOrders
-                      .map((o) => o.eventDate)
-                      .where((e) => e != null && e.toString().isNotEmpty)
-                      .toSet()
-                      .join(', ');
-                  cateringInfo = eventDates.isNotEmpty
-                      ? 'Catering Events: $eventDates'
-                      : '';
-                }
+                  String cateringInfo = '';
+                  if (isCateringDay) {
+                    final cateringOrders =
+                        dayOrders.where((o) => o.mode == 'catering').toList();
+                    final eventDates = cateringOrders
+                        .map((o) => o.eventDate)
+                        .where((e) => e != null && e.toString().isNotEmpty)
+                        .toSet()
+                        .join(', ');
+                    cateringInfo =
+                        eventDates.isNotEmpty
+                            ? 'Catering Events: $eventDates'
+                            : '';
+                  }
 
-                return ListTile(
-                  leading: const Icon(Icons.calendar_today),
-                  title: Text(
-                    DateFormat('EEEE, dd MMM yyyy').format(DateTime.parse(date)),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${dayOrders.length} order(s)\n'
-                          '💵 Paid: Rp ${numberFormat.format(paid)} • ❌ Unpaid: Rp ${numberFormat.format(unpaid)}'),
-                      if (isCateringDay && cateringInfo.isNotEmpty)
-                        Text(cateringInfo, style: const TextStyle(fontSize: 13, color: Colors.deepPurple)),
-                    ],
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DailyOrderDetailScreen(date: date),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                  return ListTile(
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(
+                      DateFormat(
+                        'EEEE, dd MMM yyyy',
+                      ).format(DateTime.parse(date)),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${dayOrders.length} order(s)\n'
+                          '💵 Paid: Rp ${numberFormat.format(paid)} • ❌ Unpaid: Rp ${numberFormat.format(unpaid)}',
+                        ),
+                        if (isCateringDay && cateringInfo.isNotEmpty)
+                          Text(
+                            cateringInfo,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.deepPurple,
+                            ),
+                          ),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DailyOrderDetailScreen(date: date),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.download),
         label: const Text('Export CSV'),

@@ -180,6 +180,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     // Print (real on Android if connected, preview elsewhere)
     if (receiptData != null) {
+      if(!mounted) return;
       await PrinterFacade.print(
         data: receiptData,
         brand: const PrinterBrand(
