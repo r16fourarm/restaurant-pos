@@ -183,7 +183,7 @@ class PrinterFacade {
     );
 
     // --- Debug preview dialog (desktop/no BT) ---
-    if (!useReal && context != null) {
+    if (!useReal && context != null && context.mounted) {
       final mock = printer as DebugReceiptPrinter;
       // ignore: use_build_context_synchronously
       await showDialog(
@@ -245,7 +245,8 @@ class PrinterFacade {
     final total = o.total;
     final paid =
         (mode == ReceiptMode.finalPaid)
-            ? (paidOverride ?? (o.amountReceived ?? total))
+            ? (paidOverride ??
+                (o.amountReceived > 0 ? o.amountReceived : total))
             : null;
     final change =
         (mode == ReceiptMode.finalPaid && paid != null) ? (paid - total) : null;

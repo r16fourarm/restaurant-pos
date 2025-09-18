@@ -145,6 +145,7 @@ class OrderDetailScreen extends StatelessWidget {
     if (amount == null) return; // cancelled
 
     if (amount < order.total) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Amount received is less than total')),
       );
@@ -174,11 +175,14 @@ class OrderDetailScreen extends StatelessWidget {
       logoAssetPath: b.logoFile == null ? b.logoAsset : null,
       logoFilePath: b.logoFile,
     );
+
+    if (!context.mounted) return;
     await PrinterFacade.print(
       data: data,
-      brand: const PrinterBrand(
-        name: 'Sekata',
-      ), // TODO: put your brand/address/phone if desired
+      brand: brand,
+      // brand: const PrinterBrand(
+      //   name: 'Sekata',
+      // ),
       context: context, // show preview when no printer / desktop
     );
 
@@ -188,7 +192,8 @@ class OrderDetailScreen extends StatelessWidget {
   Future<void> _reprint(BuildContext context) async {
     final data = PrinterFacade.fromOrder(
       order,
-      paidOverride: order.amountReceived ?? order.total,
+      paidOverride:
+          (order.amountReceived > 0 ? order.amountReceived : order.total),
       timeOverride: DateTime.now(),
     );
 

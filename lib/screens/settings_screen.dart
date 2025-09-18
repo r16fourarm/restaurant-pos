@@ -29,7 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _addrCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
     _load();
-    _loadPrintDatePrefs(); 
+    _loadPrintDatePrefs();
   }
 
   @override
@@ -70,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       lastDate: DateTime(now.year + 5),
     );
     if (d == null) return;
+    if (!mounted) return; // ✅ guard after first await
     final t = await showTimePicker(
       context: context,
       initialTime:
@@ -78,6 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : TimeOfDay.fromDateTime(now),
     );
     if (t == null) return;
+    if (!mounted) return; // ✅ guard after second await
+    
     final chosen = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     await PrintDatePrefs.setOverride(chosen);
     if (!mounted) return;
@@ -218,9 +221,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: _saveBrand,
             child: const Text('Save Brand Info'),
-            
           ),
-        _customDateSection(),
+          _customDateSection(),
         ],
       ),
     );
