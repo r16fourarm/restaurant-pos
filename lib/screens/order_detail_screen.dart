@@ -197,9 +197,21 @@ class OrderDetailScreen extends StatelessWidget {
       timeOverride: DateTime.now(),
     );
 
+
+    final b = await BrandPrefs.getBrand();
+    final brand = PrinterBrand(
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      logoAssetPath: b.logoFile == null ? b.logoAsset : null,
+      logoFilePath: b.logoFile,
+    );
+
+      if (!context.mounted) return;
+
     await PrinterFacade.print(
       data: data,
-      brand: const PrinterBrand(name: 'YOUR RESTAURANT'),
+      brand: brand,
       context: context,
     );
   }

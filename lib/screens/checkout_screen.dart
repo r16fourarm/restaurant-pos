@@ -183,9 +183,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if(!mounted) return;
       await PrinterFacade.print(
         data: receiptData,
-        brand: const PrinterBrand(
-          name: 'SEKATA',
-        ), // todo: set your brand/address/phone
+        brand: brand, // todo: set your brand/address/phone
         context: context, // so preview shows when no printer / desktop
       );
     }
