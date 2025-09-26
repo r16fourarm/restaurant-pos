@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import '../models/order.dart';
+import '../widgets/app_drawer.dart';
 import 'order_detail_screen.dart';
 
 class BillsScreen extends StatefulWidget {
@@ -101,8 +102,10 @@ class _BillsScreenState extends State<BillsScreen> {
     final filtered = _filterOrders(orders);
 
     return Scaffold(
+       drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Order History'),
+       
         actions: [
           // Mode filter dropdown
           DropdownButton<String>(

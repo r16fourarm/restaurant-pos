@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+
 import 'package:share_plus/share_plus.dart';
 import 'package:open_file/open_file.dart';
 
 import '../models/order.dart';
 import '../utils/export_csv.dart';
+import '../widgets/app_drawer.dart';
 import 'daily_order_detail_screen.dart';
 
 class DailyRecapScreen extends StatefulWidget {
@@ -144,6 +146,7 @@ class _DailyRecapScreenState extends State<DailyRecapScreen> {
     final numberFormat = NumberFormat.decimalPattern();
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Daily Recap'),
         actions: [

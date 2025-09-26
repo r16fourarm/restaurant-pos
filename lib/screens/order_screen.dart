@@ -375,28 +375,28 @@ class _TopActionsBar extends StatelessWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.settings),
-                    tooltip: 'Settings',
-                    onPressed: onSettings,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.food_bank),
-                    tooltip: 'Products',
-                    onPressed: onProducts,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.note),
-                    tooltip: 'Bills',
-                    onPressed: onBills,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.note_alt),
-                    tooltip: 'Recap',
-                    onPressed: onRecap,
-                  ),
-                ],
+                // children: [
+                //   // IconButton(
+                //   //   icon: const Icon(Icons.settings),
+                //   //   tooltip: 'Settings',
+                //   //   onPressed: onSettings,
+                //   // ),
+                //   // IconButton(
+                //   //   icon: const Icon(Icons.food_bank),
+                //   //   tooltip: 'Products',
+                //   //   onPressed: onProducts,
+                //   // ),
+                //   // IconButton(
+                //   //   icon: const Icon(Icons.note),
+                //   //   tooltip: 'Bills',
+                //   //   onPressed: onBills,
+                //   // ),
+                //   // IconButton(
+                //   //   icon: const Icon(Icons.note_alt),
+                //   //   tooltip: 'Recap',
+                //   //   onPressed: onRecap,
+                //   // ),
+                // ],
               ),
             ),
           ),

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import '../models/product.dart';
+import '../widgets/app_drawer.dart';
 
 class ProductManagementScreen extends StatefulWidget {
   const ProductManagementScreen({super.key});
@@ -244,9 +245,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       }
       final fileName =
           '${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
-      final savedFile = await file.copy(
-        '${thumbnailsDir.path}/$fileName',
-      );
+      final savedFile = await file.copy('${thumbnailsDir.path}/$fileName');
       // print("Image saved to: $savedFile.path");
       return savedFile.path;
     }
@@ -326,6 +325,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Products')),
+      drawer: const AppDrawer(),
       body: ValueListenableBuilder(
         valueListenable: Hive.box<Product>('products').listenable(),
         builder: (context, Box<Product> box, _) {

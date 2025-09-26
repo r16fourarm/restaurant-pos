@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/settings/brand_prefs.dart';
 import '../services/settings/print_date_prefs.dart';
+import '../widgets/app_drawer.dart';
 import 'package:intl/intl.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -176,6 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Brand & Logo')),
+      drawer: const AppDrawer(),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
