@@ -423,6 +423,7 @@ class _TopActionsBar extends StatelessWidget {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
+                      alignment: Alignment.center,
                       value: modeProvider.mode,
                       isExpanded: true,
                       dropdownColor: Colors.blue[800],

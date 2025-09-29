@@ -53,12 +53,31 @@ void main() async {
   );
 }
 
+
+class LoggingNavigatorObserver extends NavigatorObserver {
+  @override
+  void didPush(Route route, Route? previousRoute) {
+    debugPrint('PUSH: ${route.settings.name}');
+  }
+
+  @override
+  void didReplace({Route? newRoute, Route? oldRoute}) {
+    debugPrint('REPLACE: ${oldRoute?.settings.name} -> ${newRoute?.settings.name}');
+  }
+
+  @override
+  void didPop(Route route, Route? previousRoute) {
+    debugPrint('POP: ${route.settings.name}');
+  }
+}
+
 class RestaurantPOSApp extends StatelessWidget {
   const RestaurantPOSApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorObservers: [LoggingNavigatorObserver()],
       title: 'Restaurant POS',
       theme: ThemeData(primarySwatch: Colors.blue),
       // home:  OrderScreen(),
