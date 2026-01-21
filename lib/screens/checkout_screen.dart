@@ -115,22 +115,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       // if (kReleaseMode) override = null;
     }
     if (_paymentStatus == 'paid') {
+      final date = override ?? DateTime.now();
+      final billNumber = date.millisecondsSinceEpoch.toString();
       receiptData = PrinterFacade.fromCart(
         cart,
         // billNumber: DateTime.now().millisecondsSinceEpoch.toString(),
-        billNumber:
-            DateTime(
-              2025,
-              08,
-              27,
-              19,
-              30,
-            ).millisecondsSinceEpoch.toString(), // for testing
+        billNumber: billNumber,
         table: _tableNumberController.text,
         cashierOrOrderer: orderer,
         paid: amountReceived,
         change: _change,
-        time: override
+        time: date,
         // tax: 0, service: 0, // add later if you implement them
       );
     }
@@ -180,7 +175,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     // Print (real on Android if connected, preview elsewhere)
     if (receiptData != null) {
-      if(!mounted) return;
+      if (!mounted) return;
       await PrinterFacade.print(
         data: receiptData,
         brand: brand, // todo: set your brand/address/phone

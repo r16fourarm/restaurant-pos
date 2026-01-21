@@ -1,10 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
+
 import '../services/settings/brand_prefs.dart';
 import '../services/settings/print_date_prefs.dart';
+
+// NEW: receipt style prefs + types
+import '../services/printer/receipt_prefs.dart';
+import '../services/printer/print_receipt.dart';
+
+// For test print
+import '../services/printer/printer_facade.dart' show PrinterFacade, PrinterBrand, ReceiptData, PrintableItem;
 import '../widgets/app_drawer.dart';
-import 'package:intl/intl.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,14 +31,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _customDateEnabled = false;
   DateTime? _customDate;
 
+  // NEW: receipt style state
+  ReceiptStyle _receiptStyle = ReceiptStyle.standard;
+  bool _loadingStyle = true;
+
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController();
     _addrCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
-    _load();
+    _loadBrand();
     _loadPrintDatePrefs();
+    _loadReceiptStyle();
   }
 
   @override
@@ -41,15 +54,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _loadBrand() async {
     final b = await BrandPrefs.getBrand();
+    if (!mounted) return;
     setState(() {
       _nameCtrl.text = b.name;
       _addrCtrl.text = b.address;
       _phoneCtrl.text = b.phone;
       _logoAsset = b.logoAsset;
-      _logoFile = b.logoFile;
+      _logoFile  = b.logoFile;
     });
+  }
+
+  Future<void> _loadReceiptStyle() async {
+    final s = await ReceiptPrefs.get();
+    if (!mounted) return;
+    setState(() {
+      _receiptStyle = s;
+      _loadingStyle = false;
+    });
+  }
+
+  Future<void> _saveReceiptStyle(ReceiptStyle s) async {
+    setState(() => _receiptStyle = s);
+    await ReceiptPrefs.set(s);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Receipt style saved')),
+    );
   }
 
   Future<void> _loadPrintDatePrefs() async {
@@ -71,17 +103,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       lastDate: DateTime(now.year + 5),
     );
     if (d == null) return;
-    if (!mounted) return; // ✅ guard after first await
+    if (!mounted) return;
     final t = await showTimePicker(
       context: context,
-      initialTime:
-          _customDate != null
-              ? TimeOfDay(hour: _customDate!.hour, minute: _customDate!.minute)
-              : TimeOfDay.fromDateTime(now),
+      initialTime: _customDate != null
+          ? TimeOfDay(hour: _customDate!.hour, minute: _customDate!.minute)
+          : TimeOfDay.fromDateTime(now),
     );
     if (t == null) return;
-    if (!mounted) return; // ✅ guard after second await
-    
+    if (!mounted) return;
+
     final chosen = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     await PrintDatePrefs.setOverride(chosen);
     if (!mounted) return;
@@ -89,19 +120,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _customDateSection() {
-    final fmt =
-        (_customDate == null)
-            ? '—'
-            : DateFormat('dd/MM/yyyy HH:mm').format(_customDate!);
+    final fmt = (_customDate == null)
+        ? '—'
+        : DateFormat('dd/MM/yyyy HH:mm').format(_customDate!);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        const Text(
-          'Test Print Date',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        const Text('Test Print Date', style: TextStyle(fontWeight: FontWeight.bold)),
         SwitchListTile(
           title: const Text('Enable custom print date (testing)'),
           value: _customDateEnabled,
@@ -122,14 +149,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed:
-                _customDateEnabled && _customDate != null
-                    ? () async {
-                      await PrintDatePrefs.clearOverride();
-                      if (!mounted) return;
-                      setState(() => _customDate = null);
-                    }
-                    : null,
+            onPressed: _customDateEnabled && _customDate != null
+                ? () async {
+                    await PrintDatePrefs.clearOverride();
+                    if (!mounted) return;
+                    setState(() => _customDate = null);
+                  }
+                : null,
             child: const Text('Clear date'),
           ),
         ),
@@ -144,18 +170,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final saved = await BrandPrefs.setLogoFromFile(path);
     if (saved != null) {
-      await _load();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Logo updated')));
-      }
+      await _loadBrand();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Logo updated')));
     }
   }
 
   Future<void> _resetLogo() async {
     await BrandPrefs.resetLogoToAsset();
-    await _load();
+    await _loadBrand();
   }
 
   Future<void> _saveBrand() async {
@@ -164,11 +188,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
       address: _addrCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
     );
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Brand saved')));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Brand saved')));
+  }
+
+  // -------- Receipt Style Toggle + Test Print --------
+
+  Widget _receiptStyleSection(BuildContext context) {
+    if (_loadingStyle) {
+      return const ListTile(
+        title: Text('Receipt Style'),
+        subtitle: Text('Loading...'),
+      );
     }
+
+    final useSegmented = Theme.of(context).useMaterial3;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        const Text('Receipt Style', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+
+        if (useSegmented)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: SegmentedButton<ReceiptStyle>(
+              segments: const [
+                ButtonSegment(
+                  value: ReceiptStyle.standard,
+                  label: Text('Standard'),
+                  icon: Icon(Icons.image),
+                ),
+                ButtonSegment(
+                  value: ReceiptStyle.simpleText,
+                  label: Text('Text-only'),
+                  icon: Icon(Icons.notes),
+                ),
+                ButtonSegment(
+                  value: ReceiptStyle.blankNote,
+                  label: Text('Blank'),
+                  icon: Icon(Icons.receipt_long),
+                ),
+              ],
+              selected: <ReceiptStyle>{_receiptStyle},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => _saveReceiptStyle(s.first),
+            ),
+          )
+        else
+          Column(
+            children: [
+              RadioListTile<ReceiptStyle>(
+                title: const Text('Standard (with logo/brand)'),
+                value: ReceiptStyle.standard,
+                groupValue: _receiptStyle,
+                onChanged: (v) => v == null ? null : _saveReceiptStyle(v),
+              ),
+              RadioListTile<ReceiptStyle>(
+                title: const Text('Text-only (brand header)'),
+                value: ReceiptStyle.simpleText,
+                groupValue: _receiptStyle,
+                onChanged: (v) => v == null ? null : _saveReceiptStyle(v),
+              ),
+              RadioListTile<ReceiptStyle>(
+                title: const Text('Blank note (date + items + totals)'),
+                value: ReceiptStyle.blankNote,
+                groupValue: _receiptStyle,
+                onChanged: (v) => v == null ? null : _saveReceiptStyle(v),
+              ),
+            ],
+          ),
+
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.print),
+            label: const Text('Test Print'),
+            onPressed: _onTestPrintPressed,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _onTestPrintPressed() async {
+    // Load brand for test
+    final b = await BrandPrefs.getBrand();
+    final brand = PrinterBrand(
+      name: b.name,
+      address: b.address,
+      phone: b.phone,
+      logoAssetPath: b.logoAsset,
+      logoFilePath: b.logoFile,
+      logoBytes: null,
+    );
+
+    // Date override (if enabled)
+    DateTime when = DateTime.now();
+    if (_customDateEnabled) {
+      final o = await PrintDatePrefs.getOverride();
+      if (o != null) when = o;
+    }
+
+    // Minimal dummy data for test
+    final items = <PrintableItem>[
+      const PrintableItem(name: 'Nasi Goreng Spesial', qty: 1, total: 28000, addons: ['Telur', 'Kerupuk']),
+      const PrintableItem(name: 'Teh Manis Dingin',   qty: 2, total: 12000),
+    ];
+    final subtotal = items.fold<num>(0, (s, it) => s + it.total).toDouble();
+    final total = subtotal;
+
+    final data = ReceiptData(
+      mode: ReceiptMode.finalPaid,
+      billNumber: 'TEST-${DateFormat('yyyyMMddHHmmss').format(when)}',
+      table: 'A1',
+      cashierOrOrderer: 'Tester',
+      items: items,
+      subtotal: subtotal,
+      tax: 0,
+      service: 0,
+      total: total,
+      paid: total,
+      change: 0,
+      time: when,
+      footerNote: 'Settings → Test Print',
+    );
+
+    // Let facade read the saved style (we don’t pass style explicitly)
+    await PrinterFacade.print(
+      data: data,
+      brand: brand,
+      context: context,
+    );
   }
 
   @override
@@ -176,11 +331,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final logoPath = _logoFile ?? _logoAsset;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Brand & Logo')),
+      appBar: AppBar(title: const Text('Brand & Printing')),
       drawer: const AppDrawer(),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // BRAND INFO
           TextField(
             controller: _nameCtrl,
             decoration: const InputDecoration(labelText: 'Name'),
@@ -224,6 +380,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: _saveBrand,
             child: const Text('Save Brand Info'),
           ),
+
+          // RECEIPT STYLE + TEST PRINT
+          _receiptStyleSection(context),
+
+          // CUSTOM DATE (testing)
           _customDateSection(),
         ],
       ),

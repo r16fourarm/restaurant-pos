@@ -7,9 +7,10 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 
 import 'bt_receipt_printer.dart';
 import 'debug_receipt_printer.dart';
-import 'print_receipt.dart'; // ReceiptMode + printRestaurantReceipt
+import 'print_receipt.dart'; // ReceiptMode, ReceiptStyle, printRestaurantReceipt
 import 'receipt_printer.dart';
-import 'escpos_image.dart'; // <-- NEW: ESC/POS raster image helper
+import 'escpos_image.dart'; // ESC/POS raster image helper
+import 'receipt_prefs.dart'; // <-- NEW: load/save user style
 
 // Your models
 import '../../models/order.dart';
@@ -51,11 +52,11 @@ class PrintableItem {
   });
 
   Map<String, dynamic> toMap() => {
-    'name': name,
-    'qty': qty,
-    'total': total,
-    'addons': addons.map((n) => {'name': n}).toList(),
-  };
+        'name': name,
+        'qty': qty,
+        'total': total,
+        'addons': addons.map((n) => {'name': n}).toList(),
+      };
 }
 
 /// Encapsulates receipt data
@@ -100,26 +101,32 @@ class PrinterFacade {
 
   /// Print using BT on Android if connected, else debug preview.
   ///
-  /// [logoTargetWidth] is only used on real printers (ESC/POS path).
-  /// Keep it <= 384 for 58mm heads; 320 is safest to avoid stalls.
+  /// [printerHeadWidthPx] is currently unused (kept for compatibility).
+  /// [logoTargetWidth] only matters for ESC/POS image printing (Standard style).
   static Future<void> print({
     required ReceiptData data,
     required PrinterBrand brand,
     BuildContext? context,
+
+    // NEW: if null, we read from ReceiptPrefs
+    ReceiptStyle? style,
+
     int printerHeadWidthPx = _defaultHeadWidthPx,
     int logoTargetWidth = 320,
     int logoDarknessThreshold = 140,
   }) async {
+    // Resolve receipt style (Settings-driven by default)
+    final effectiveStyle = style ?? await ReceiptPrefs.get();
+
     final useReal = await _canUseRealPrinter();
     final ReceiptPrinter printer =
-        useReal
-            ? BtReceiptPrinter(BlueThermalPrinter.instance)
-            : DebugReceiptPrinter();
+        useReal ? BtReceiptPrinter(BlueThermalPrinter.instance)
+                : DebugReceiptPrinter();
 
     Uint8List? logoForPreview;
 
-    // --- Print logo ---
-    if (useReal) {
+    // --- Print logo ONLY for Standard style on real printer ---
+    if (useReal && effectiveStyle == ReceiptStyle.standard) {
       try {
         // Prefer file logo if present; otherwise use asset (or fallback)
         if ((brand.logoFilePath ?? '').isNotEmpty) {
@@ -141,28 +148,33 @@ class PrinterFacade {
           }
         }
 
-        // --- IMPORTANT RESET SEQUENCE ---
+        // --- IMPORTANT RESET SEQUENCE after raster image ---
         final bt = BlueThermalPrinter.instance;
-        await bt.writeBytes(Uint8List.fromList([0x1B, 0x40])); // ESC @
+        await bt.writeBytes(Uint8List.fromList([0x1B, 0x40])); // ESC @ reset
         await bt.writeBytes(Uint8List.fromList([0x1B, 0x74, 0x00])); // ESC t 0
         await bt.writeBytes(Uint8List.fromList([0x0A, 0x0A])); // LF x2
         await Future<void>.delayed(const Duration(milliseconds: 150));
       } catch (_) {
-        // continue with text-only if the logo fails
+        // Continue with text-only if the logo fails
       }
-      logoForPreview = null; // don't double-print logo in text renderer
-    } else {
-      // unchanged: preview supports both file & asset
+      // Avoid duplicate logo in the renderer (we already printed it).
+      logoForPreview = null;
+    } else if (!useReal && effectiveStyle == ReceiptStyle.standard) {
+      // For debug preview, we show the logo (if available).
       logoForPreview = await _loadLogoBytes(
         assetPath: brand.logoAssetPath,
         filePath: brand.logoFilePath,
         bytes: brand.logoBytes,
       );
+    } else {
+      // Non-standard styles never show a logo.
+      logoForPreview = null;
     }
 
-    // --- Print the rest of the receipt text/lines ---
+    // --- Render the receipt text/lines using the unified renderer ---
     await printRestaurantReceipt(
       printer,
+      style: effectiveStyle,
       mode: data.mode,
       brand: brand,
       billNumber: data.billNumber,
@@ -177,47 +189,45 @@ class PrinterFacade {
       change: data.change,
       time: data.time,
       footerNote: data.footerNote,
-      // For real printer we already printed the logo above; pass null to skip.
-      // For debug preview, pass bytes so the dialog can show the image.
+      // For real printer Standard style, we already printed the logo; pass null.
+      // For debug preview Standard style, pass bytes so dialog can show it.
       logoBytes: logoForPreview,
     );
 
-    // --- Debug preview dialog (desktop/no BT) ---
+    // --- Debug preview dialog (desktop / no BT) ---
     if (!useReal && context != null && context.mounted) {
       final mock = printer as DebugReceiptPrinter;
       // ignore: use_build_context_synchronously
       await showDialog(
         context: context,
-        builder:
-            (_) => AlertDialog(
-              title: Text(
-                data.mode == ReceiptMode.finalPaid
-                    ? 'Receipt Preview'
-                    : 'UNPAID Ticket Preview',
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (logoForPreview != null &&
-                        logoForPreview.isNotEmpty) ...[
-                      Center(child: Image.memory(logoForPreview, height: 80)),
-                      const SizedBox(height: 12),
-                    ],
-                    Text(
-                      mock.output,
-                      style: const TextStyle(fontFamily: 'monospace'),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
+        builder: (_) => AlertDialog(
+          title: Text(
+            data.mode == ReceiptMode.finalPaid
+                ? 'Receipt Preview'
+                : 'UNPAID Ticket Preview',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (logoForPreview != null && logoForPreview.isNotEmpty) ...[
+                  Center(child: Image.memory(logoForPreview, height: 80)),
+                  const SizedBox(height: 12),
+                ],
+                Text(
+                  mock.output,
+                  style: const TextStyle(fontFamily: 'monospace'),
                 ),
               ],
             ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -230,24 +240,21 @@ class PrinterFacade {
     DateTime? timeOverride,
     String? footerNote,
   }) {
-    final items =
-        o.items
-            .map(
-              (it) => PrintableItem(
-                name: it.name,
-                qty: it.quantity,
-                total: it.total,
-                addons: it.addons,
-              ),
-            )
-            .toList();
+    final items = o.items
+        .map(
+          (it) => PrintableItem(
+            name: it.name,
+            qty: it.quantity,
+            total: it.total,
+            addons: it.addons,
+          ),
+        )
+        .toList();
 
     final total = o.total;
-    final paid =
-        (mode == ReceiptMode.finalPaid)
-            ? (paidOverride ??
-                (o.amountReceived > 0 ? o.amountReceived : total))
-            : null;
+    final paid = (mode == ReceiptMode.finalPaid)
+        ? (paidOverride ?? (o.amountReceived > 0 ? o.amountReceived : total))
+        : null;
     final change =
         (mode == ReceiptMode.finalPaid && paid != null) ? (paid - total) : null;
 
@@ -273,13 +280,14 @@ class PrinterFacade {
     double? paidOverride,
     DateTime? timeOverride,
     String? footerNote,
-  }) => fromOrder(
-    o,
-    mode: mode,
-    paidOverride: paidOverride,
-    timeOverride: timeOverride,
-    footerNote: footerNote,
-  );
+  }) =>
+      fromOrder(
+        o,
+        mode: mode,
+        paidOverride: paidOverride,
+        timeOverride: timeOverride,
+        footerNote: footerNote,
+      );
 
   /// Build ReceiptData from the Cart (checkout “Pay Now”)
   static ReceiptData fromCart(
@@ -294,17 +302,16 @@ class PrinterFacade {
     DateTime? time,
     String? footerNote,
   }) {
-    final items =
-        cart.items
-            .map(
-              (ci) => PrintableItem(
-                name: ci.product.name,
-                qty: ci.quantity,
-                total: ci.totalPrice,
-                addons: ci.addons.map((a) => a.name).toList(),
-              ),
-            )
-            .toList();
+    final items = cart.items
+        .map(
+          (ci) => PrintableItem(
+            name: ci.product.name,
+            qty: ci.quantity,
+            total: ci.totalPrice,
+            addons: ci.addons.map((a) => a.name).toList(),
+          ),
+        )
+        .toList();
 
     final subtotal = cart.total;
     final total = subtotal + tax + service;
@@ -313,8 +320,7 @@ class PrinterFacade {
       mode: ReceiptMode.finalPaid,
       billNumber: billNumber,
       table: (table != null && table.isNotEmpty) ? table : null,
-      cashierOrOrderer:
-          cashierOrOrderer.isNotEmpty ? cashierOrOrderer : 'Cashier',
+      cashierOrOrderer: cashierOrOrderer.isNotEmpty ? cashierOrOrderer : 'Cashier',
       items: items,
       subtotal: subtotal,
       tax: tax,
@@ -323,7 +329,6 @@ class PrinterFacade {
       paid: paid,
       change: change,
       time: time ?? DateTime.now(),
-      // time: time ?? DateTime(2025, 08, 27, 19, 30),
       footerNote: footerNote,
     );
   }
