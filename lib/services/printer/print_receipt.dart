@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
+
 import 'receipt_printer.dart';
 import 'printer_facade.dart'; // for PrinterBrand
 
@@ -43,45 +44,66 @@ Future<void> printRestaurantReceipt(
   // Optional logo (used only by standard style)
   Uint8List? logoBytes,
 }) async {
+  // =========================
+  // 1) PREPARE COMMON VALUES
+  // =========================
   final now = time ?? DateTime.now();
-  final money = NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
+  final money =
+      NumberFormat.currency(locale: 'id', symbol: 'Rp ', decimalDigits: 0);
   final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(now);
 
-  // --- small helpers ---------------------------------------------------------
-  Future<void> _headerStandard() async {
-    if (logoBytes != null) {
-      await printer.printImage(logoBytes!, align: AlignX.center);
+
+
+  Future<void> headerStandard() async {
+    // ---- Logo (optional) ----
+
+    final bytes = logoBytes;
+    if (bytes != null) {
+      await printer.printImage(bytes, align: AlignX.center);
       await printer.newline();
     }
+
+    // ---- Brand info ----
     await printer.println(brand.name.toUpperCase(), size: 2, align: 1);
-    if ((brand.address ?? '').trim().isNotEmpty) {
-      await printer.println(brand.address!.trim(), align: 1);
+
+    final address = (brand.address ?? '').trim();
+    if (address.isNotEmpty) {
+      await printer.println(address, align: 1);
     }
-    if ((brand.phone ?? '').trim().isNotEmpty) {
-      await printer.println('Tel: ${brand.phone!.trim()}', align: 1);
+
+    final phone = (brand.phone ?? '').trim();
+    if (phone.isNotEmpty) {
+      await printer.println('Tel: $phone', align: 1);
     }
+
     await printer.newline();
   }
 
-  Future<void> _metaStandard() async {
+  Future<void> metaStandard() async {
     await printer.leftRight('Bill No.', billNumber);
     await printer.leftRight('Date', dateStr);
-    if ((table ?? '').trim().isNotEmpty) {
-      await printer.leftRight('Table', table!.trim());
+
+    final tableText = (table ?? '').trim();
+    if (tableText.isNotEmpty) {
+      await printer.leftRight('Table', tableText);
     }
+
     await printer.leftRight('Order By', cashierOrOrderer);
     await printer.divider();
   }
 
-  Future<void> _itemsSection() async {
+  Future<void> itemsSection() async {
+    // Print setiap item:
+    // - "qty x name"
+    // - total harga rata kanan
+    // - addons (kalau ada) diawali "+"
+
     for (final it in items) {
       final name = '${it['name']}';
       final qty = (it['qty'] ?? 1).toString();
       final lineTotal = (it['total'] ?? 0) as num;
 
-      // Item line (qty x name)
       await printer.println('$qty x $name');
-      // Price aligned right
       await printer.leftRight('', money.format(lineTotal));
 
       // Add-ons (if any)
@@ -98,123 +120,167 @@ Future<void> printRestaurantReceipt(
     }
   }
 
-  Future<void> _totalsFinalPaid() async {
+  Future<void> totalsFinalPaid() async {
+    // Untuk final paid:
+    // - tampil subtotal/tax/service/total
+    // - tampil paid dan change
     final paidVal = paid ?? total;
     final changeVal = change ?? (paidVal - total);
 
     await printer.leftRight('Subtotal', money.format(subtotal));
-    if (tax > 0)     await printer.leftRight('Tax',     money.format(tax));
-    if (service > 0) await printer.leftRight('Service', money.format(service));
-    await printer.leftRight('TOTAL',  money.format(total),  size: 2);
-    await printer.leftRight('Paid',   money.format(paidVal));
+    if (tax > 0) {
+      await printer.leftRight('Tax', money.format(tax));
+    }
+    if (service > 0) {
+      await printer.leftRight('Service', money.format(service));
+    }
+
+    await printer.leftRight('TOTAL', money.format(total), size: 2);
+    await printer.leftRight('Paid', money.format(paidVal));
     await printer.leftRight('Change', money.format(changeVal));
   }
 
-  Future<void> _totalsUnpaid() async {
+  Future<void> totalsUnpaid() async {
+    // Untuk unpaid:
+    // - hanya amount due
+    // - plus reminder text
     await printer.leftRight('Amount Due', money.format(total), size: 2);
     await printer.newline();
     await printer.println('*** UNPAID (Pay Later) ***', align: 1);
     await printer.println('This is not a tax receipt', align: 1);
   }
 
-  Future<void> _footer([bool includeThanks = true]) async {
+  Future<void> footer({required bool includeThanks}) async {
+    // Footer:
+    // - spacing
+    // - optional thanks
+    // - optional footerNote
+    // - cut paper
     await printer.newline();
+
     if (includeThanks) {
       await printer.println('Thank you!', align: 1);
     }
-    if ((footerNote ?? '').trim().isNotEmpty) {
-      await printer.println(footerNote!.trim(), align: 1);
+
+    final note = (footerNote ?? '').trim();
+    if (note.isNotEmpty) {
+      await printer.println(note, align: 1);
     }
+
     await printer.newline();
     await printer.cut();
   }
-  // ---------------------------------------------------------------------------
 
   // =========================
-  // RENDER by RECEIPT STYLE
+  // 3) RENDER BY STYLE
   // =========================
   switch (style) {
     case ReceiptStyle.standard:
-      // Your current behavior (with optional logo + full brand)
-      await _headerStandard();
-      await _metaStandard();
+      // Standard:
+      // - logo (optional)
+      // - brand full
+      // - meta full
+      // - items
+      // - totals by mode
+      // - footer + thanks
+      await headerStandard();
+      await metaStandard();
 
-      // Items
-      await _itemsSection();
+      await itemsSection();
       await printer.divider();
 
-      // Totals by mode
       if (mode == ReceiptMode.finalPaid) {
-        await _totalsFinalPaid();
+        await totalsFinalPaid();
       } else {
-        await _totalsUnpaid();
+        await totalsUnpaid();
       }
 
-      await _footer(true);
+      await footer(includeThanks: true);
       break;
 
     case ReceiptStyle.simpleText:
-      // Text-only header (no logo), but still shows brand & bill number
-      if ((brand.name).trim().isNotEmpty) {
-        await printer.println(brand.name.toUpperCase(), size: 2, align: 1);
+      // SimpleText:
+      // - no logo
+      // - still shows brand + meta
+      // - items
+      // - totals by mode (paid/change emphasized)
+      final name = brand.name.trim();
+      if (name.isNotEmpty) {
+        await printer.println(name.toUpperCase(), size: 2, align: 1);
       }
-      if ((brand.address ?? '').trim().isNotEmpty) {
-        await printer.println(brand.address!.trim(), align: 1);
+
+      final address = (brand.address ?? '').trim();
+      if (address.isNotEmpty) {
+        await printer.println(address, align: 1);
       }
-      if ((brand.phone ?? '').trim().isNotEmpty) {
-        await printer.println('Tel: ${brand.phone!.trim()}', align: 1);
+
+      final phone = (brand.phone ?? '').trim();
+      if (phone.isNotEmpty) {
+        await printer.println('Tel: $phone', align: 1);
       }
+
       await printer.divider();
 
-      // Meta (still include bill/date/table/cashier)
       if (billNumber.trim().isNotEmpty) {
         await printer.leftRight('Bill No.', billNumber);
       }
+
       await printer.leftRight('Date', dateStr);
-      if ((table ?? '').trim().isNotEmpty) {
-        await printer.leftRight('Table', table!.trim());
+
+      final tableText = (table ?? '').trim();
+      if (tableText.isNotEmpty) {
+        await printer.leftRight('Table', tableText);
       }
+
       await printer.leftRight('Order By', cashierOrOrderer);
       await printer.divider();
 
-      // Items
-      await _itemsSection();
+      await itemsSection();
       await printer.divider();
 
-      // Totals by mode (keep paid/change emphasized a bit)
       if (mode == ReceiptMode.finalPaid) {
         final paidVal = paid ?? total;
         final changeVal = change ?? (paidVal - total);
 
         await printer.leftRight('Subtotal', money.format(subtotal));
-        if (tax > 0)     await printer.leftRight('Tax',     money.format(tax));
-        if (service > 0) await printer.leftRight('Service', money.format(service));
-        await printer.leftRight('TOTAL',   money.format(total), size: 2);
-        await printer.leftRight('PAID',    money.format(paidVal), size: 1);
-        await printer.leftRight('CHANGE',  money.format(changeVal), size: 1);
+        if (tax > 0) {
+          await printer.leftRight('Tax', money.format(tax));
+        }
+        if (service > 0) {
+          await printer.leftRight('Service', money.format(service));
+        }
+
+        await printer.leftRight('TOTAL', money.format(total), size: 2);
+        await printer.leftRight('PAID', money.format(paidVal), size: 1);
+        await printer.leftRight('CHANGE', money.format(changeVal), size: 1);
       } else {
-        await _totalsUnpaid();
+        await totalsUnpaid();
       }
 
-      await _footer(true);
+      await footer(includeThanks: true);
       break;
 
     case ReceiptStyle.blankNote:
-      // BLANK NOTE: no brand, no bill number — only date, items, subtotal/total
-      // Date BIG & centered
-      await printer.println(DateFormat('dd MMM yyyy  HH:mm').format(now), size: 2, align: 1);
+      // BlankNote:
+      // - no brand, no bill number
+      // - show date big
+      // - items
+      // - subtotal + total
+      // - footer without thanks (pure blank style)
+      await printer.println(
+        DateFormat('dd MMM yyyy  HH:mm').format(now),
+        size: 2,
+        align: 1,
+      );
       await printer.divider();
 
-      // Items only
-      await _itemsSection();
+      await itemsSection();
       await printer.divider();
 
-      // Subtotal + TOTAL big (ignore paid/change per your request)
       await printer.leftRight('Subtotal', money.format(subtotal));
       await printer.leftRight('TOTAL', money.format(total), size: 2);
 
-      // Minimal footer (no thanks if you want pure blank; set to false)
-      await _footer(false);
+      await footer(includeThanks: false);
       break;
   }
 }

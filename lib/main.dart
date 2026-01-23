@@ -14,6 +14,11 @@ import 'screens/product_management_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/settings/brand_prefs.dart';
 import 'screens/settings_screen.dart';
+import 'screens/pos_login_screen.dart';
+import 'screens/incoming_orders_screen.dart';
+import 'screens/qr_orders_gate_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +27,7 @@ void main() async {
   final appSupportDir = await getApplicationSupportDirectory();
   await Hive.initFlutter(appSupportDir.path);
 
-    // Use your own folder, e.g. "RestaurantPOS"
+  // Use your own folder, e.g. "RestaurantPOS"
   // final myAppDir = Directory('${appSupportDir.parent.path}/RestaurantPOS');
   // if (!myAppDir.existsSync()) myAppDir.createSync();
 
@@ -40,6 +45,8 @@ void main() async {
   // await Hive.openBox<OrderItem>('orderItems'); // Open OrderItem box
   await Hive.openBox<Product>('products'); // Open Product box
 
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(
     MultiProvider(
       providers: [
@@ -53,7 +60,6 @@ void main() async {
   );
 }
 
-
 class LoggingNavigatorObserver extends NavigatorObserver {
   @override
   void didPush(Route route, Route? previousRoute) {
@@ -62,7 +68,9 @@ class LoggingNavigatorObserver extends NavigatorObserver {
 
   @override
   void didReplace({Route? newRoute, Route? oldRoute}) {
-    debugPrint('REPLACE: ${oldRoute?.settings.name} -> ${newRoute?.settings.name}');
+    debugPrint(
+      'REPLACE: ${oldRoute?.settings.name} -> ${newRoute?.settings.name}',
+    );
   }
 
   @override
@@ -90,6 +98,10 @@ class RestaurantPOSApp extends StatelessWidget {
         '/recap': (context) => const DailyRecapScreen(),
         '/products': (context) => const ProductManagementScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/posLogin': (context) => const PosLoginScreen(),
+        '/incomingOrders': (context) => const IncomingOrdersScreen(),
+        '/qrOrders': (context) => const QrOrdersGateScreen(),
+
       },
     );
   }

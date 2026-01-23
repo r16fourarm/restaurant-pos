@@ -82,9 +82,12 @@ class _PrinterConnectScreenState extends State<PrinterConnectScreen> {
       _connectedAddr = d.address; // remember what we connected to
       if (!mounted) return;
       await _refreshConn();
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Connected to ${d.name ?? d.address}')),
       );
+      
       // Tell caller (e.g., Drawer) that connection state changed
       Navigator.pop(context, true);
     } catch (e) {
@@ -105,6 +108,7 @@ class _PrinterConnectScreenState extends State<PrinterConnectScreen> {
       _connectedAddr = null;
       if (!mounted) return;
       await _refreshConn();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Disconnected')),
       );

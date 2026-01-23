@@ -6,12 +6,13 @@ import 'package:intl/intl.dart';
 import '../services/settings/brand_prefs.dart';
 import '../services/settings/print_date_prefs.dart';
 
-// NEW: receipt style prefs + types
+// receipt style prefs + types
 import '../services/printer/receipt_prefs.dart';
 import '../services/printer/print_receipt.dart';
 
 // For test print
-import '../services/printer/printer_facade.dart' show PrinterFacade, PrinterBrand, ReceiptData, PrintableItem;
+import '../services/printer/printer_facade.dart'
+    show PrinterFacade, PrinterBrand, ReceiptData, PrintableItem;
 import '../widgets/app_drawer.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -31,7 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _customDateEnabled = false;
   DateTime? _customDate;
 
-  // NEW: receipt style state
   ReceiptStyle _receiptStyle = ReceiptStyle.standard;
   bool _loadingStyle = true;
 
@@ -41,6 +41,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _nameCtrl = TextEditingController();
     _addrCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
+
+    // kick off async loads
     _loadBrand();
     _loadPrintDatePrefs();
     _loadReceiptStyle();
@@ -62,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _addrCtrl.text = b.address;
       _phoneCtrl.text = b.phone;
       _logoAsset = b.logoAsset;
-      _logoFile  = b.logoFile;
+      _logoFile = b.logoFile;
     });
   }
 
@@ -76,9 +78,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveReceiptStyle(ReceiptStyle s) async {
+    // Update UI first (snappy UX)
     setState(() => _receiptStyle = s);
+
     await ReceiptPrefs.set(s);
+
+    // IMPORTANT: don't use context if widget unmounted after await
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Receipt style saved')),
     );
@@ -96,6 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _pickCustomDateTime() async {
     final now = DateTime.now();
+
     final d = await showDatePicker(
       context: context,
       initialDate: _customDate ?? now,
@@ -104,6 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (d == null) return;
     if (!mounted) return;
+
     final t = await showTimePicker(
       context: context,
       initialTime: _customDate != null
@@ -116,6 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final chosen = DateTime(d.year, d.month, d.day, t.hour, t.minute);
     await PrintDatePrefs.setOverride(chosen);
     if (!mounted) return;
+
     setState(() => _customDate = chosen);
   }
 
@@ -128,7 +138,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        const Text('Test Print Date', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text(
+          'Test Print Date',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         SwitchListTile(
           title: const Text('Enable custom print date (testing)'),
           value: _customDateEnabled,
@@ -169,17 +182,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (path == null) return;
 
     final saved = await BrandPrefs.setLogoFromFile(path);
-    if (saved != null) {
-      await _loadBrand();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Logo updated')));
-    }
+    if (saved == null) return;
+
+    // Reload brand info from prefs after save
+    await _loadBrand();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Logo updated')),
+    );
   }
 
   Future<void> _resetLogo() async {
     await BrandPrefs.resetLogoToAsset();
     await _loadBrand();
+    // No context usage here; safe.
   }
 
   Future<void> _saveBrand() async {
@@ -189,8 +206,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       phone: _phoneCtrl.text.trim(),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Brand saved')));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Brand saved')),
+    );
   }
 
   // -------- Receipt Style Toggle + Test Print --------
@@ -209,7 +228,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        const Text('Receipt Style', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('Receipt Style',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
 
         if (useSegmented)
@@ -278,6 +298,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _onTestPrintPressed() async {
     // Load brand for test
     final b = await BrandPrefs.getBrand();
+
+    // If user navigated away while loading prefs, stop.
+    if (!mounted) return;
+
     final brand = PrinterBrand(
       name: b.name,
       address: b.address,
@@ -291,14 +315,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     DateTime when = DateTime.now();
     if (_customDateEnabled) {
       final o = await PrintDatePrefs.getOverride();
+      if (!mounted) return;
       if (o != null) when = o;
     }
 
     // Minimal dummy data for test
     final items = <PrintableItem>[
-      const PrintableItem(name: 'Nasi Goreng Spesial', qty: 1, total: 28000, addons: ['Telur', 'Kerupuk']),
-      const PrintableItem(name: 'Teh Manis Dingin',   qty: 2, total: 12000),
+      const PrintableItem(
+        name: 'Nasi Goreng Spesial',
+        qty: 1,
+        total: 28000,
+        addons: ['Telur', 'Kerupuk'],
+      ),
+      const PrintableItem(
+        name: 'Teh Manis Dingin',
+        qty: 2,
+        total: 12000,
+      ),
     ];
+
     final subtotal = items.fold<num>(0, (s, it) => s + it.total).toDouble();
     final total = subtotal;
 
@@ -318,7 +353,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       footerNote: 'Settings → Test Print',
     );
 
-    // Let facade read the saved style (we don’t pass style explicitly)
+    // NOTE:
+    // Keeping `context` parameter to avoid refactoring PrinterFacade signature.
+    // Ensure PrinterFacade itself uses context safely (checks mounted or avoids UI after awaits).
     await PrinterFacade.print(
       data: data,
       brand: brand,

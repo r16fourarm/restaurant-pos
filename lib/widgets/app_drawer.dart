@@ -42,8 +42,15 @@ class AppDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.receipt_long),
               title: const Text('Orders'),
-              onTap: () => _goNamed(context, '/order'), // your OrderScreen route
+              onTap:
+                  () => _goNamed(context, '/order'), // your OrderScreen route
             ),
+            ListTile(
+              leading: const Icon(Icons.qr_code_2),
+              title: const Text('Incoming QR Orders'),
+              onTap: () => _goNamed(context, '/qrOrders'),
+            ),
+
             ListTile(
               leading: const Icon(Icons.inventory_2),
               title: const Text('Products'),
